@@ -1,0 +1,478 @@
+---
+// Live prayer times for a chosen zone, or for the visitor's location.
+// Everything happens in the browser: the location is matched against zone
+// boundaries locally, and only the zone's timetable is fetched, exactly as
+// the app does it. Data comes from the public simplesolat-data CDN.
+---
+
+<section class="live" aria-labelledby="times-heading">
+  <h2 id="times-heading" class="live-heading">
+    Prayer times today
+  </h2>
+
+  <div class="controls">
+    <button type="button" class="button" id="locate">
+      Use my location
+    </button>
+    <span class="muted or">or</span>
+    <label>
+      <span class="sr-only">Country</span>
+      <select id="country" disabled>
+        <option value="">Loading countries…</option>
+      </select>
+    </label>
+    <label>
+      <span class="sr-only">Zone</span>
+      <select id="zone" disabled>
+        <option value="">Choose a zone</option>
+      </select>
+    </label>
+  </div>
+
+  <p id="status" class="status muted" aria-live="polite"></p>
+
+  <div id="result" hidden>
+    <p class="place">
+      <strong id="place"></strong>
+      <br />
+      <span id="meta" class="muted"></span>
+    </p>
+    <p id="date" class="date"></p>
+    <table class="times">
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="note" class="note muted"></p>
+  </div>
+
+  <p class="privacy muted">
+    Your location stays in your browser. It's matched against zone boundaries
+    right here, and only your zone's timetable is downloaded.
+  </p>
+</section>
+
+<script>
+  import { load } from "js-yaml";
+
+  const CDN = "https://simplesolat-data.netlify.app";
+  const STORE_KEY = "simplesolat:zone";
+
+  type Country = {
+    code: string;
+    name: string;
+    source: string;
+    geojson: string;
+    mapping: string;
+    shape_property: string;
+  };
+  type Zone = {
+    code: string;
+    country: string;
+    state: string;
+    location: string;
+    timezone: string;
+  };
+  type Day = Record<"date" | Key, string>;
+  type Key = "imsak" | "fajr" | "syuruk" | "dhuhr" | "asr" | "maghrib" | "isha";
+  type Ring = [number, number][];
+  type Geometry =
+    | { type: "Polygon"; coordinates: Ring[] }
+    | { type: "MultiPolygon"; coordinates: Ring[][] };
+  type Feature = { properties: Record<string, string>; geometry: Geometry };
+
+  const ROWS: [Key, string][] = [
+    ["imsak", "Imsak"],
+    ["fajr", "Fajr"],
+    ["syuruk", "Syuruk"],
+    ["dhuhr", "Dhuhr"],
+    ["asr", "Asr"],
+    ["maghrib", "Maghrib"],
+    ["isha", "Isha"],
+  ];
+
+  // Rough bounding boxes [minLon, minLat, maxLon, maxLat], so we only download
+  // the boundary file for a country the visitor might be in. Smallest first,
+  // because some overlap (Singapore and Brunei sit inside Malaysia's box).
+  const BOXES: Record<string, [number, number, number, number]> = {
+    SG: [103.5, 1.1, 104.2, 1.5],
+    BN: [113.9, 3.9, 115.5, 5.1],
+    AL: [19.1, 39.5, 21.2, 42.8],
+    BA: [15.6, 42.4, 19.8, 45.4],
+    LK: [79.4, 5.8, 82.0, 10.0],
+    AE: [51.4, 22.5, 56.5, 26.2],
+    MY: [99.5, 0.8, 119.4, 7.5],
+    TR: [25.5, 35.7, 45.0, 42.3],
+    ID: [94.9, -11.1, 141.2, 6.2],
+  };
+
+  const el = <T extends HTMLElement>(id: string) =>
+    document.getElementById(id) as T;
+  const countrySel = el<HTMLSelectElement>("country");
+  const zoneSel = el<HTMLSelectElement>("zone");
+  const locateBtn = el<HTMLButtonElement>("locate");
+  const status = el<HTMLParagraphElement>("status");
+  const result = el<HTMLDivElement>("result");
+
+  let countries: Country[] = [];
+  const zonesByCountry = new Map<string, Zone[]>();
+  let current: { zone: Zone; country: Country; day: Day } | null = null;
+
+  const setStatus = (text: string) => (status.textContent = text);
+
+  async function fetchText(path: string): Promise<string> {
+    const res = await fetch(path.startsWith("http") ? path : CDN + path);
+    if (!res.ok) throw new Error(`${res.status} ${path}`);
+    return res.text();
+  }
+
+  async function getZones(code: string): Promise<Zone[]> {
+    let zones = zonesByCountry.get(code);
+    if (!zones) {
+      const doc = load(await fetchText(`/zones/${code}.yaml`)) as {
+        zones: Zone[];
+      };
+      zones = doc.zones;
+      zonesByCountry.set(code, zones);
+    }
+    return zones;
+  }
+
+  // "YYYY-MM-DD" and "HH:MM" in the zone's own timezone.
+  function nowIn(timezone: string) {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      })
+        .formatToParts(new Date())
+        .map((p) => [p.type, p.value]),
+    );
+    return {
+      date: `${parts.year}-${parts.month}-${parts.day}`,
+      time: `${parts.hour}:${parts.minute}`,
+    };
+  }
+
+  function to12h(hhmm: string): string {
+    const [h, m] = hhmm.split(":").map(Number);
+    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+  }
+
+  function render() {
+    if (!current) return;
+    const { zone, country, day } = current;
+    const now = nowIn(zone.timezone);
+
+    // Same rule as the app: a row is current from its time until the next
+    // row's time; Isha runs until midnight.
+    let active = -1;
+    ROWS.forEach(([key], i) => {
+      const next = ROWS[i + 1];
+      if (now.time >= day[key] && (!next || now.time < day[next[0]]))
+        active = i;
+    });
+
+    el("place").textContent = `${zone.location}, ${zone.state}`;
+    el("meta").textContent = `${zone.code} · Source: ${country.source}`;
+    el("date").textContent = new Date(`${day.date}T00:00:00`).toDateString();
+    el("rows").replaceChildren(
+      ...ROWS.map(([key, label], i) => {
+        const tr = document.createElement("tr");
+        if (i === active) tr.className = "active";
+        const th = document.createElement("th");
+        th.scope = "row";
+        th.textContent = label;
+        const td = document.createElement("td");
+        td.textContent = to12h(day[key]);
+        tr.append(th, td);
+        return tr;
+      }),
+    );
+
+    const fajrActive = active === 1;
+    el("note").textContent = fajrActive
+      ? `Fajr ends at Syuruk, ${to12h(day.syuruk)}.`
+      : `Fajr ends at Syuruk (sunrise).`;
+    result.hidden = false;
+  }
+
+  async function show(countryCode: string, zoneCode: string) {
+    const country = countries.find((c) => c.code === countryCode);
+    const zone = (await getZones(countryCode)).find((z) => z.code === zoneCode);
+    if (!country || !zone) return;
+
+    setStatus(`Loading prayer times for ${zone.location}…`);
+    const today = nowIn(zone.timezone).date;
+    const month = today.slice(0, 7);
+    const days = JSON.parse(
+      await fetchText(
+        `/prayer-times/${country.code}/${zone.code}/${month}.json`,
+      ),
+    ) as Day[];
+    const day = days.find((d) => d.date === today);
+    if (!day) {
+      setStatus("Today's timetable isn't available for this zone yet.");
+      return;
+    }
+
+    current = { zone, country, day };
+    render();
+    setStatus("");
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify([countryCode, zoneCode]));
+    } catch {}
+  }
+
+  async function fillZones(countryCode: string, selected?: string) {
+    zoneSel.disabled = true;
+    const zones = await getZones(countryCode);
+    const byState = new Map<string, Zone[]>();
+    for (const z of zones)
+      byState.set(z.state, [...(byState.get(z.state) ?? []), z]);
+
+    const placeholder = new Option("Choose a zone", "");
+    const groups = [...byState].map(([state, list]) => {
+      const group = document.createElement("optgroup");
+      group.label = state;
+      for (const z of list) group.append(new Option(z.location, z.code));
+      return group;
+    });
+    zoneSel.replaceChildren(placeholder, ...groups);
+    zoneSel.value = selected ?? "";
+    zoneSel.disabled = false;
+  }
+
+  // Ray casting: is the point inside this ring?
+  function inRing([x, y]: [number, number], ring: Ring): boolean {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  }
+
+  function inPolygon(point: [number, number], rings: Ring[]): boolean {
+    const [outer, ...holes] = rings;
+    return inRing(point, outer) && !holes.some((h) => inRing(point, h));
+  }
+
+  function contains(geometry: Geometry, point: [number, number]): boolean {
+    if (geometry.type === "Polygon")
+      return inPolygon(point, geometry.coordinates);
+    return geometry.coordinates.some((poly) => inPolygon(point, poly));
+  }
+
+  async function locate() {
+    if (!("geolocation" in navigator)) {
+      setStatus(
+        "Your browser can't share your location. Choose a zone instead.",
+      );
+      return;
+    }
+    setStatus("Finding your location…");
+    const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout: 15000,
+        maximumAge: 10 * 60 * 1000,
+      }),
+    ).catch(() => null);
+    if (!pos) {
+      setStatus("Couldn't get your location. Choose a zone instead.");
+      return;
+    }
+
+    const point: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+    const candidates = countries.filter((c) => {
+      const b = BOXES[c.code];
+      return (
+        b &&
+        point[0] >= b[0] &&
+        point[0] <= b[2] &&
+        point[1] >= b[1] &&
+        point[1] <= b[3]
+      );
+    });
+
+    for (const country of candidates) {
+      setStatus(`Checking the zones for ${country.name}…`);
+      const geo = JSON.parse(await fetchText(country.geojson)) as {
+        features: Feature[];
+      };
+      const feature = geo.features.find((f) => contains(f.geometry, point));
+      if (!feature) continue;
+
+      const mapping = JSON.parse(await fetchText(country.mapping)) as Record<
+        string,
+        { zone: string }
+      >;
+      const entry = mapping[feature.properties[country.shape_property]];
+      if (!entry) continue;
+
+      countrySel.value = country.code;
+      await fillZones(country.code, entry.zone);
+      await show(country.code, entry.zone);
+      return;
+    }
+
+    setStatus(
+      "You're outside the countries with official timetables. The app works there too, calculating the times on your phone.",
+    );
+  }
+
+  async function init() {
+    try {
+      const doc = load(await fetchText("/countries.yaml")) as {
+        countries: Country[];
+      };
+      countries = doc.countries;
+    } catch {
+      setStatus("Couldn't load the list of countries. Please try again later.");
+      return;
+    }
+
+    countrySel.replaceChildren(
+      new Option("Choose a country", ""),
+      ...countries.map((c) => new Option(c.name, c.code)),
+    );
+    countrySel.disabled = false;
+
+    countrySel.addEventListener("change", async () => {
+      result.hidden = true;
+      current = null;
+      if (countrySel.value) await fillZones(countrySel.value);
+    });
+    zoneSel.addEventListener("change", () => {
+      if (zoneSel.value)
+        show(countrySel.value, zoneSel.value).catch(() =>
+          setStatus("Couldn't load the prayer times. Please try again."),
+        );
+    });
+    locateBtn.addEventListener("click", () =>
+      locate().catch(() =>
+        setStatus("Something went wrong. Choose a zone instead."),
+      ),
+    );
+
+    // Keep the highlight current while the page is open.
+    setInterval(() => {
+      if (!current) return;
+      if (nowIn(current.zone.timezone).date !== current.day.date) {
+        show(current.country.code, current.zone.code).catch(() => {});
+      } else {
+        render();
+      }
+    }, 30 * 1000);
+
+    let saved: [string, string] | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
+    } catch {}
+    if (saved && countries.some((c) => c.code === saved[0])) {
+      countrySel.value = saved[0];
+      await fillZones(saved[0], saved[1]);
+      await show(saved[0], saved[1]).catch(() => {});
+    }
+  }
+
+  init();
+</script>
+
+<style>
+  .live {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.25rem 1.25rem;
+    margin-block: 2rem;
+  }
+  .live-heading {
+    margin: 0 0 1rem;
+    padding: 0;
+    border: 0;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .or {
+    font-size: 0.9rem;
+  }
+  .controls label {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+  select {
+    width: 100%;
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 100%;
+  }
+  .status:empty {
+    display: none;
+  }
+  .place {
+    margin: 1.25rem 0 0.25rem;
+    font-size: 1.1rem;
+  }
+  .place .muted {
+    font-size: 0.85rem;
+  }
+  .date {
+    margin: 0 0 0.5rem;
+  }
+  .times {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 22rem;
+    font-size: 1.1rem;
+  }
+  /* The rows are created by the script, so Astro's scoped styles don't reach
+     them: these rules have to be global. */
+  .times :global(th),
+  .times :global(td) {
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    font-weight: 400;
+  }
+  .times :global(td) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .times :global(tr.active) {
+    background: var(--highlight);
+    color: var(--highlight-text);
+  }
+  .times :global(tr.active th),
+  .times :global(tr.active td) {
+    font-weight: 700;
+  }
+  .note,
+  .privacy {
+    font-size: 0.85rem;
+    margin-bottom: 0;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>

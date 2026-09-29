@@ -1,0 +1,237 @@
+---
+import { Image } from "astro:assets";
+
+import Base from "../layouts/Base.astro";
+import LiveTimes from "../components/LiveTimes.astro";
+import { SITE, SOURCES } from "../lib/site";
+
+import widgets from "../assets/widgets.jpeg";
+import widgetsDark from "../assets/widgets-dark.jpeg";
+import main from "../assets/screen-main-1.jpeg";
+import mainDark from "../assets/screen-main-dark-1.jpeg";
+import qibla from "../assets/screen-qibla.jpeg";
+
+const shots = [
+  {
+    src: main,
+    alt: "The app showing today's seven prayer times for Gombak, Selangor",
+  },
+  {
+    src: widgets,
+    alt: "Four simplesolat widget styles on an Android home screen",
+  },
+  { src: mainDark, alt: "The app in dark mode" },
+  { src: widgetsDark, alt: "The widgets in dark mode" },
+  { src: qibla, alt: "The Qibla compass" },
+];
+---
+
+<Base>
+  <section class="hero">
+    <h1>simplesolat</h1>
+    <p class="tagline">{SITE.tagline}</p>
+    <p>
+      A free prayer times app for Android. Home screen widgets that follow you
+      when you travel, reminders for every prayer, and all seven times,
+      including Syuruk. No ads, no account, and your location never leaves your
+      phone.
+    </p>
+    <p class="actions">
+      <a class="button" href={SITE.playStore}>
+        Get it on Google Play
+      </a>
+      <a class="button secondary" href="#times">
+        See today's times
+      </a>
+    </p>
+  </section>
+
+  <div id="times">
+    <LiveTimes />
+  </div>
+
+  <h2 id="features">What it does</h2>
+  <ul class="features">
+    <li>
+      <strong>Widgets that update themselves.</strong> Several styles, light and
+      dark. They refresh in the background, and when you travel into a new zone,
+      they switch to it on their own. No opening the app at the start of each
+      month.
+    </li>
+    <li>
+      <strong>All seven times.</strong> Imsak, Fajr, Syuruk, Dhuhr, Asr, Maghrib
+      and Isha, with the current one highlighted. Syuruk tells you when the time
+      for Fajr ends.
+    </li>
+    <li>
+      <strong>Reminders</strong> when each prayer time begins.
+    </li>
+    <li>
+      <strong>A Qibla compass.</strong>
+    </li>
+    <li>
+      <strong>Works offline.</strong> Timetables are kept on your phone for
+      weeks ahead.
+    </li>
+    <li>
+      <strong>Works in many countries.</strong> Official timetables for nine
+      countries, and calculated times everywhere else.
+    </li>
+    <li>
+      <strong>Free, with no ads and no account.</strong> The code is
+      <a href={SITE.github}>public on GitHub</a>.
+    </li>
+  </ul>
+
+  <div class="shots" role="list">
+    {shots.map((s) => (
+      <div role="listitem">
+        <Image src={s.src} alt={s.alt} widths={[240, 480]} sizes="240px" />
+      </div>
+    ))}
+  </div>
+
+  <h2 id="sources">Where the times come from</h2>
+  <p>
+    Wherever there's an official timetable, simplesolat uses it, taken from each
+    country's religious authority:
+  </p>
+  <table class="sources">
+    <thead>
+      <tr>
+        <th>Country</th>
+        <th>Official source</th>
+      </tr>
+    </thead>
+    <tbody>
+      {SOURCES.map((s) => (
+        <tr>
+          <td>{s.country}</td>
+          <td>
+            <a href={s.url}>{s.authority}</a>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+  <p>
+    Everywhere else, the app calculates the times on your phone, using the
+    method that's usual for your region. Zone boundaries come from
+    <a href="https://www.geoboundaries.org/">geoBoundaries</a>.
+  </p>
+
+  <h2 id="privacy">Privacy</h2>
+  <p>
+    simplesolat works out your prayer zone <strong>on your phone</strong>, by
+    checking your location against zone boundaries it has downloaded. Your
+    location is never sent anywhere. The only thing the app asks a server for is
+    the timetable for your zone.
+  </p>
+  <p>
+    There's no account, no analytics and no ads. Read the
+    <a href="/privacy/">full privacy policy</a>.
+  </p>
+
+  <h2 id="help">Help</h2>
+
+  <h3>Reminders arrive late, or not at all</h3>
+  <p>
+    Many Android phones stop apps running in the background to save battery,
+    which delays reminders and widget updates. Set simplesolat's battery usage
+    to <em>Unrestricted</em> (usually under Settings › Apps › simplesolat ›
+    Battery), and allow <em>Alarms &amp; reminders</em> if your phone asks. The
+    exact steps differ by brand;
+    <a href="https://dontkillmyapp.com/">Don't kill my app!</a> has a guide for
+    each one.
+  </p>
+
+  <h3>The widget isn't updating</h3>
+  <p>
+    It's usually the same battery setting as above. Widgets refresh in the
+    background about every 15 minutes, and when a prayer time begins.
+  </p>
+
+  <h3>It shows the wrong zone</h3>
+  <p>
+    Check that location is turned on and allowed for simplesolat. The zone is
+    worked out from your location, so a rough or old location can land you in a
+    neighbouring zone.
+  </p>
+
+  <h3>The times are slightly different from my mosque</h3>
+  <p>
+    Where there's an official timetable, the app uses it exactly. Local mosques
+    sometimes adjust by a minute or two. Outside those nine countries, times are
+    calculated, and can differ a little from local practice.
+  </p>
+
+  <p>
+    Something else? <a href={SITE.issues}>Open an issue on GitHub</a>.
+  </p>
+
+  <h2 id="developers">For developers</h2>
+  <p>
+    The prayer times behind simplesolat are public: static files on a CDN, with
+    zones, boundaries and monthly timetables, readable from any website. This
+    page reads them straight from your browser. See
+    <a href={SITE.data}>simplesolat-data</a> for the format and the sources.
+  </p>
+
+  <h2 id="story">Why it exists</h2>
+  <p>
+    simplesolat started after the free prayer app I relied on stopped working,
+    and I found out why.
+    <a href={SITE.story}>Read the story</a>.
+  </p>
+</Base>
+
+<style>
+  .hero {
+    padding-top: 2.5rem;
+  }
+  .tagline {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0.5rem 0 1rem;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+  .features {
+    padding-left: 1.1rem;
+  }
+  .features li + li {
+    margin-top: 0.5rem;
+  }
+  .shots {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-block: 1.5rem 0.5rem;
+    scroll-snap-type: x mandatory;
+  }
+  .shots > div {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+  .shots :global(img) {
+    width: 240px;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .sources {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+  }
+  .sources th,
+  .sources td {
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+</style>

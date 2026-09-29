@@ -1,0 +1,99 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../lib/site";
+---
+
+<Base
+  title="Privacy policy"
+  description="How simplesolat handles your data: it doesn't collect any."
+>
+  <h1>Privacy policy</h1>
+  <p class="muted">Last updated: 29 September 2026</p>
+
+  <p>
+    simplesolat doesn't collect personal data. There are no accounts, no
+    analytics, no tracking and no ads. This page explains what the app does with
+    the few things it needs.
+  </p>
+
+  <h2>Your location</h2>
+  <ul>
+    <li>
+      <strong>Why:</strong> to work out which prayer zone you're in, so the app
+      shows the right times, and so widgets can switch zones when you travel.
+    </li>
+    <li>
+      <strong>How:</strong> the app checks your location against zone boundaries
+      it has downloaded, entirely on your phone.
+    </li>
+    <li>
+      <strong>Never sent anywhere:</strong> your location isn't stored on or
+      sent to any server.
+    </li>
+    <li>
+      <strong>Background location:</strong> used only so widgets and reminders
+      can follow you to a new zone without you opening the app.
+    </li>
+  </ul>
+
+  <h2>Prayer times</h2>
+  <ul>
+    <li>
+      For countries with an official timetable, the app downloads the timetable
+      for your <em>zone</em> from the public
+      <a href={SITE.data}>simplesolat-data</a> files, served by Netlify. Like
+      any website, Netlify can see your IP address and which file was requested,
+      which reveals the zone, not your exact location.
+    </li>
+    <li>
+      Elsewhere, prayer times are calculated on your phone, with no network
+      request.
+    </li>
+    <li>
+      Timetables and zone boundaries are kept on your phone, so most days the
+      app makes no network requests at all.
+    </li>
+    <li>
+      Older versions of the app (1.0.x) fetched timetables by zone from
+      <code>api.simplesolat.com</code> instead. It also receives only the zone,
+      never your location.
+    </li>
+  </ul>
+
+  <h2>Permissions</h2>
+  <ul>
+    <li>
+      <strong>Location</strong>, as described above.
+    </li>
+    <li>
+      <strong>Notifications</strong>, for prayer time reminders.
+    </li>
+    <li>
+      <strong>Alarms &amp; reminders</strong> and{" "}
+      <strong>battery optimisation</strong> exemptions, so reminders and widgets
+      arrive on time.
+    </li>
+  </ul>
+  <p>
+    Reminders are scheduled on your phone. Nothing about them is sent anywhere.
+  </p>
+
+  <h2>This website</h2>
+  <p>
+    simplesolat.com has no analytics and no cookies. If you use "Use my
+    location" on the live prayer times, your location is matched to a zone in
+    your browser and isn't sent anywhere. The page remembers the zone you last
+    chose in your browser's local storage, only on your device.
+  </p>
+
+  <h2>Changes</h2>
+  <p>
+    If this policy changes, the new version will be posted on this page, with a
+    new date at the top.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions about privacy? <a href={SITE.issues}>Open an issue on GitHub</a>.
+  </p>
+</Base>

@@ -1,0 +1,59 @@
+---
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/700.css";
+import "../styles/global.css";
+import { SITE } from "../lib/site";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description = SITE.description } = Astro.props;
+const fullTitle = title
+  ? `${title} · ${SITE.name}`
+  : `${SITE.name}: prayer times`;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="color-scheme" content="light dark" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-name" href="/">
+        simplesolat
+      </a>
+      <nav aria-label="Main">
+        <a href="/#times">Prayer times</a>
+        <a href="/#features">Features</a>
+        <a href="/#help">Help</a>
+        <a href="/privacy/">Privacy</a>
+      </nav>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <a href={SITE.playStore}>Google Play</a>
+      <a href={SITE.github}>Source</a>
+      <a href={SITE.data}>Prayer times data</a>
+      <a href="/privacy/">Privacy</a>
+      <a href={SITE.story}>Why I built it</a>
+    </footer>
+  </body>
+</html>
