@@ -46,12 +46,15 @@
 
   <p class="privacy muted">
     Your location stays in your browser. It's matched against zone boundaries
-    right here, and only your zone's timetable is downloaded.
+    right here, and only your zone's timetable is downloaded. Outside the
+    countries with an official timetable, the times are calculated right here
+    too.
   </p>
 </section>
 
 <script>
   import { load } from "js-yaml";
+  import { calculateDay } from "../lib/calculate";
 
   const CDN = "https://simplesolat-data.netlify.app";
   const STORE_KEY = "simplesolat:zone";
@@ -117,7 +120,15 @@
 
   let countries: Country[] = [];
   const zonesByCountry = new Map<string, Zone[]>();
-  let current: { zone: Zone; country: Country; day: Day } | null = null;
+  // What's on screen: an official zone, or times calculated for a location.
+  type View = {
+    place: string;
+    meta: string;
+    timezone: string;
+    day: Day;
+    reload: () => Promise<void>;
+  };
+  let current: View | null = null;
 
   const setStatus = (text: string) => (status.textContent = text);
 
@@ -167,8 +178,8 @@
 
   function render() {
     if (!current) return;
-    const { zone, country, day } = current;
-    const now = nowIn(zone.timezone);
+    const { place, meta, timezone, day } = current;
+    const now = nowIn(timezone);
 
     // Same rule as the app: a row is current from its time until the next
     // row's time; Isha runs until midnight.
@@ -179,8 +190,8 @@
         active = i;
     });
 
-    el("place").textContent = `${zone.location}, ${zone.state}`;
-    el("meta").textContent = `${zone.code} · Source: ${country.source}`;
+    el("place").textContent = place;
+    el("meta").textContent = meta;
     el("date").textContent = new Date(`${day.date}T00:00:00`).toDateString();
     el("rows").replaceChildren(
       ...ROWS.map(([key, label], i) => {
@@ -222,7 +233,13 @@
       return;
     }
 
-    current = { zone, country, day };
+    current = {
+      place: `${zone.location}, ${zone.state}`,
+      meta: `${zone.code} · Source: ${country.source}`,
+      timezone: zone.timezone,
+      day,
+      reload: () => show(countryCode, zoneCode),
+    };
     render();
     setStatus("");
     try {
@@ -333,9 +350,49 @@
       return;
     }
 
-    setStatus(
-      "You're outside the countries with official timetables. The app works there too, calculating the times on your phone.",
+    await showCalculated(pos.coords.latitude, pos.coords.longitude);
+  }
+
+  // Outside the countries with an official timetable, calculate the times
+  // here in the browser, with the method the app uses for that country.
+  async function showCalculated(lat: number, lng: number) {
+    setStatus("Calculating prayer times for your location…");
+    let country: { ISO_A2: string; NAME: string } | null = null;
+    try {
+      const res = await fetch("/geodata/countries-adm0-web.json");
+      const world = (await res.json()) as {
+        features: (Feature & {
+          properties: { ISO_A2: string; NAME: string };
+        })[];
+      };
+      country =
+        world.features.find((f) => contains(f.geometry, [lng, lat]))
+          ?.properties ?? null;
+    } catch {
+      // Without the country, the default method is used.
+    }
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const { label, times } = calculateDay(
+      new Date(),
+      lat,
+      lng,
+      country?.ISO_A2 ?? null,
+      timezone,
     );
+
+    countrySel.value = "";
+    zoneSel.replaceChildren(new Option("Choose a zone", ""));
+    zoneSel.disabled = true;
+    current = {
+      place: country ? `Near you, ${country.NAME}` : "Near you",
+      meta: `Calculated (${label}). No official timetable here.`,
+      timezone,
+      day: { date: nowIn(timezone).date, ...times },
+      reload: () => showCalculated(lat, lng),
+    };
+    render();
+    setStatus("");
   }
 
   async function init() {
@@ -375,8 +432,8 @@
     // Keep the highlight current while the page is open.
     setInterval(() => {
       if (!current) return;
-      if (nowIn(current.zone.timezone).date !== current.day.date) {
-        show(current.country.code, current.zone.code).catch(() => {});
+      if (nowIn(current.timezone).date !== current.day.date) {
+        current.reload().catch(() => {});
       } else {
         render();
       }
