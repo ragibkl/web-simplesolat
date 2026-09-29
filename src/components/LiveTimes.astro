@@ -77,7 +77,10 @@
   type Geometry =
     | { type: "Polygon"; coordinates: Ring[] }
     | { type: "MultiPolygon"; coordinates: Ring[][] };
-  type Feature = { properties: Record<string, string>; geometry: Geometry };
+  type Feature = {
+    properties: Record<string, string>;
+    geometry: Geometry | null;
+  };
 
   const ROWS: [Key, string][] = [
     ["imsak", "Imsak"],
@@ -264,10 +267,17 @@
     return inRing(point, outer) && !holes.some((h) => inRing(point, h));
   }
 
-  function contains(geometry: Geometry, point: [number, number]): boolean {
+  function contains(
+    geometry: Geometry | null,
+    point: [number, number],
+  ): boolean {
+    // Some boundary files include a region with no shape at all; skip those.
+    if (!geometry) return false;
     if (geometry.type === "Polygon")
       return inPolygon(point, geometry.coordinates);
-    return geometry.coordinates.some((poly) => inPolygon(point, poly));
+    if (geometry.type === "MultiPolygon")
+      return geometry.coordinates.some((poly) => inPolygon(point, poly));
+    return false;
   }
 
   async function locate() {
