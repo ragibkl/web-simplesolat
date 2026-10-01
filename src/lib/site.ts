@@ -10,6 +10,7 @@ export const SITE = {
   cdn: "https://simplesolat-data.netlify.app",
   story: "https://ragib.dev/writing/why-i-built-a-prayer-times-app/",
   issues: "https://github.com/ragibkl/simplesolat/issues",
+  supportEmail: "ragib.badaruddin@gmail.com",
 };
 
 /** Countries with official timetables, as listed in simplesolat-data. */

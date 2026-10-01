@@ -1,0 +1,81 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../lib/site";
+---
+
+<Base
+  title="Support"
+  description="Get help with simplesolat: reminders, widgets, zones, crashes, and how to get in touch."
+>
+  <h1>Support</h1>
+
+  <h2>Contact</h2>
+  <p>
+    Email <a href={`mailto:${SITE.supportEmail}`}>{SITE.supportEmail}</a>. Tell
+    me your phone model, your Android version and what happened, and I'll get
+    back to you.
+  </p>
+  <p>
+    If you have a GitHub account, you can also
+    <a href={SITE.issues}>open an issue on GitHub</a>.
+  </p>
+
+  <h2>Common problems</h2>
+
+  <h3>Reminders arrive late, or not at all</h3>
+  <p>
+    First check that notifications are allowed for simplesolat (Settings ›
+    Apps › simplesolat › Notifications).
+  </p>
+  <p>
+    Many Android phones also stop apps running in the background to save
+    battery, which delays reminders and widget updates. Set simplesolat's
+    battery usage to <em>Unrestricted</em> (usually under Settings › Apps ›
+    simplesolat › Battery), and allow <em>Alarms &amp; reminders</em> if your
+    phone asks. The exact steps differ by brand;
+    <a href="https://dontkillmyapp.com/">Don't kill my app!</a> has a guide for
+    each one.
+  </p>
+
+  <h3>The widget isn't updating</h3>
+  <p>
+    It's usually the same battery setting as above. Widgets refresh in the
+    background about every 15 minutes, and when a prayer time begins. To follow
+    you when you travel, the app also needs location access
+    <em>all the time</em>, not only while it's open.
+  </p>
+
+  <h3>It shows the wrong zone</h3>
+  <p>
+    Check that location is turned on and allowed for simplesolat. The zone is
+    worked out from your location, so a rough or old location can land you in a
+    neighbouring zone. Opening the app updates it.
+  </p>
+
+  <h3>The app closes as soon as I open it</h3>
+  <p>
+    Update simplesolat from
+    <a href={SITE.playStore}>Google Play</a> first. Version 1.1.2 fixes a crash
+    when opening the app.
+  </p>
+  <p>
+    If it still closes, clear the app's data: Settings › Apps › simplesolat ›
+    Storage › <em>Clear data</em>. You won't lose anything important; the app
+    finds your zone again and downloads the times. If that doesn't help,
+    email me.
+  </p>
+
+  <h3>The times are slightly different from my mosque</h3>
+  <p>
+    Where there's an official timetable, the app uses it exactly. Local mosques
+    sometimes adjust by a minute or two. Outside those nine countries, times are
+    calculated, and can differ a little from local practice. See
+    <a href="/#sources">where the times come from</a>.
+  </p>
+
+  <h3>Does simplesolat collect my data?</h3>
+  <p>
+    No. There's no account, no ads and no analytics, and your location never
+    leaves your phone. See the <a href="/privacy/">privacy policy</a>.
+  </p>
+</Base>
