@@ -74,8 +74,19 @@
     location: string;
     timezone: string;
   };
-  type Day = Record<"date" | Key, string>;
-  type Key = "imsak" | "fajr" | "syuruk" | "dhuhr" | "asr" | "maghrib" | "isha";
+  // Dhuha only comes from official timetables (Malaysia and Brunei).
+  type Day = Record<"date" | Exclude<Key, "dhuha">, string> & {
+    dhuha?: string;
+  };
+  type Key =
+    | "imsak"
+    | "fajr"
+    | "syuruk"
+    | "dhuha"
+    | "dhuhr"
+    | "asr"
+    | "maghrib"
+    | "isha";
   type Ring = [number, number][];
   type Geometry =
     | { type: "Polygon"; coordinates: Ring[] }
@@ -89,6 +100,7 @@
     ["imsak", "Imsak"],
     ["fajr", "Fajr"],
     ["syuruk", "Syuruk"],
+    ["dhuha", "Dhuha"],
     ["dhuhr", "Dhuhr"],
     ["asr", "Asr"],
     ["maghrib", "Maghrib"],
@@ -180,13 +192,16 @@
     if (!current) return;
     const { place, meta, timezone, day } = current;
     const now = nowIn(timezone);
+    // Only the rows this day has: no Dhuha outside Malaysia and Brunei.
+    const rows = ROWS.filter(([key]) => day[key] !== undefined);
+    const time = (key: Key) => day[key] as string;
 
     // Same rule as the app: a row is current from its time until the next
     // row's time; Isha runs until midnight.
     let active = -1;
-    ROWS.forEach(([key], i) => {
-      const next = ROWS[i + 1];
-      if (now.time >= day[key] && (!next || now.time < day[next[0]]))
+    rows.forEach(([key], i) => {
+      const next = rows[i + 1];
+      if (now.time >= time(key) && (!next || now.time < time(next[0])))
         active = i;
     });
 
@@ -194,14 +209,14 @@
     el("meta").textContent = meta;
     el("date").textContent = new Date(`${day.date}T00:00:00`).toDateString();
     el("rows").replaceChildren(
-      ...ROWS.map(([key, label], i) => {
+      ...rows.map(([key, label], i) => {
         const tr = document.createElement("tr");
         if (i === active) tr.className = "active";
         const th = document.createElement("th");
         th.scope = "row";
         th.textContent = label;
         const td = document.createElement("td");
-        td.textContent = to12h(day[key]);
+        td.textContent = to12h(time(key));
         tr.append(th, td);
         return tr;
       }),
