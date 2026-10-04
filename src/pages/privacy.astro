@@ -8,7 +8,7 @@ import { SITE } from "../lib/site";
   description="How simplesolat handles your data: it doesn't collect any."
 >
   <h1>Privacy policy</h1>
-  <p class="muted">Last updated: 29 September 2026</p>
+  <p class="muted">Last updated: 4 October 2026</p>
 
   <p>
     simplesolat doesn't collect personal data. There are no accounts, no
@@ -32,7 +32,10 @@ import { SITE } from "../lib/site";
     </li>
     <li>
       <strong>Background location:</strong> used only so widgets and reminders
-      can follow you to a new zone without you opening the app.
+      can follow you to a new zone without you opening the app. On Android the
+      app checks your zone now and then; on iPhone and iPad it asks iOS to let
+      it know when you've moved a few kilometres (a geofence, kept by iOS on
+      your device), and only then checks your zone.
     </li>
   </ul>
 
@@ -69,13 +72,20 @@ import { SITE } from "../lib/site";
       <strong>Notifications</strong>, for prayer time reminders.
     </li>
     <li>
-      <strong>Alarms &amp; reminders</strong> and{" "}
+      <strong>Android only:</strong> <strong>Alarms &amp; reminders</strong> and{" "}
       <strong>battery optimisation</strong> exemptions, so reminders and widgets
       arrive on time.
+    </li>
+    <li>
+      <strong>iPhone and iPad:</strong> location <strong>Always</strong>{" "}
+      (optional), so the zone can follow you when you travel. Without it, the
+      zone updates when you open the app.
     </li>
   </ul>
   <p>
     Reminders are scheduled on your phone. Nothing about them is sent anywhere.
+    On iPhone and iPad, widget data (the next few days' times) is shared between
+    the app and its widget on your device only.
   </p>
 
   <h2>This website</h2>
