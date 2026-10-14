@@ -42,6 +42,11 @@
       <tbody id="rows"></tbody>
     </table>
     <p id="note" class="note muted"></p>
+    <p class="month">
+      <a id="month-link" href="/times/">
+        See the whole month →
+      </a>
+    </p>
   </div>
 
   <p class="privacy muted">
@@ -53,74 +58,23 @@
 </section>
 
 <script>
-  import { load } from "js-yaml";
   import { calculateDay } from "../lib/calculate";
-
-  const CDN = "https://simplesolat-data.netlify.app";
-  const STORE_KEY = "simplesolat:zone";
-
-  type Country = {
-    code: string;
-    name: string;
-    source: string;
-    geojson: string;
-    mapping: string;
-    shape_property: string;
-  };
-  type Zone = {
-    code: string;
-    country: string;
-    state: string;
-    location: string;
-    timezone: string;
-  };
-  // Dhuha only comes from official timetables (Malaysia and Brunei).
-  type Day = Record<"date" | Exclude<Key, "dhuha">, string> & {
-    dhuha?: string;
-  };
-  type Key =
-    | "imsak"
-    | "fajr"
-    | "syuruk"
-    | "dhuha"
-    | "dhuhr"
-    | "asr"
-    | "maghrib"
-    | "isha";
-  type Ring = [number, number][];
-  type Geometry =
-    | { type: "Polygon"; coordinates: Ring[] }
-    | { type: "MultiPolygon"; coordinates: Ring[][] };
-  type Feature = {
-    properties: Record<string, string>;
-    geometry: Geometry | null;
-  };
-
-  const ROWS: [Key, string][] = [
-    ["imsak", "Imsak"],
-    ["fajr", "Fajr"],
-    ["syuruk", "Syuruk"],
-    ["dhuha", "Dhuha"],
-    ["dhuhr", "Dhuhr"],
-    ["asr", "Asr"],
-    ["maghrib", "Maghrib"],
-    ["isha", "Isha"],
-  ];
-
-  // Rough bounding boxes [minLon, minLat, maxLon, maxLat], so we only download
-  // the boundary file for a country the visitor might be in. Smallest first,
-  // because some overlap (Singapore and Brunei sit inside Malaysia's box).
-  const BOXES: Record<string, [number, number, number, number]> = {
-    SG: [103.5, 1.1, 104.2, 1.5],
-    BN: [113.9, 3.9, 115.5, 5.1],
-    AL: [19.1, 39.5, 21.2, 42.8],
-    BA: [15.6, 42.4, 19.8, 45.4],
-    LK: [79.4, 5.8, 82.0, 10.0],
-    AE: [51.4, 22.5, 56.5, 26.2],
-    MY: [99.5, 0.8, 119.4, 7.5],
-    TR: [25.5, 35.7, 45.0, 42.3],
-    ID: [94.9, -11.1, 141.2, 6.2],
-  };
+  import {
+    type Country,
+    type Day,
+    type Key,
+    ROWS,
+    STORE_KEY,
+    fillZones,
+    findWorldCountry,
+    findZone,
+    getCountries,
+    getMonth,
+    getPosition,
+    getZones,
+    nowIn,
+    to12h,
+  } from "../lib/times";
 
   const el = <T extends HTMLElement>(id: string) =>
     document.getElementById(id) as T;
@@ -129,64 +83,22 @@
   const locateBtn = el<HTMLButtonElement>("locate");
   const status = el<HTMLParagraphElement>("status");
   const result = el<HTMLDivElement>("result");
+  const monthLink = el<HTMLAnchorElement>("month-link");
 
   let countries: Country[] = [];
-  const zonesByCountry = new Map<string, Zone[]>();
   // What's on screen: an official zone, or times calculated for a location.
   type View = {
     place: string;
     meta: string;
     timezone: string;
     day: Day;
+    // The month page for the same place.
+    monthHref: string;
     reload: () => Promise<void>;
   };
   let current: View | null = null;
 
   const setStatus = (text: string) => (status.textContent = text);
-
-  async function fetchText(path: string): Promise<string> {
-    const res = await fetch(path.startsWith("http") ? path : CDN + path);
-    if (!res.ok) throw new Error(`${res.status} ${path}`);
-    return res.text();
-  }
-
-  async function getZones(code: string): Promise<Zone[]> {
-    let zones = zonesByCountry.get(code);
-    if (!zones) {
-      const doc = load(await fetchText(`/zones/${code}.yaml`)) as {
-        zones: Zone[];
-      };
-      zones = doc.zones;
-      zonesByCountry.set(code, zones);
-    }
-    return zones;
-  }
-
-  // "YYYY-MM-DD" and "HH:MM" in the zone's own timezone.
-  function nowIn(timezone: string) {
-    const parts = Object.fromEntries(
-      new Intl.DateTimeFormat("en-GB", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      })
-        .formatToParts(new Date())
-        .map((p) => [p.type, p.value]),
-    );
-    return {
-      date: `${parts.year}-${parts.month}-${parts.day}`,
-      time: `${parts.hour}:${parts.minute}`,
-    };
-  }
-
-  function to12h(hhmm: string): string {
-    const [h, m] = hhmm.split(":").map(Number);
-    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
-  }
 
   function render() {
     if (!current) return;
@@ -226,6 +138,7 @@
     el("note").textContent = fajrActive
       ? `Fajr ends at Syuruk, ${to12h(day.syuruk)}.`
       : `Fajr ends at Syuruk (sunrise).`;
+    monthLink.href = current.monthHref;
     result.hidden = false;
   }
 
@@ -236,12 +149,7 @@
 
     setStatus(`Loading prayer times for ${zone.location}…`);
     const today = nowIn(zone.timezone).date;
-    const month = today.slice(0, 7);
-    const days = JSON.parse(
-      await fetchText(
-        `/prayer-times/${country.code}/${zone.code}/${month}.json`,
-      ),
-    ) as Day[];
+    const days = await getMonth(country.code, zone.code, today.slice(0, 7));
     const day = days.find((d) => d.date === today);
     if (!day) {
       setStatus("Today's timetable isn't available for this zone yet.");
@@ -253,6 +161,7 @@
       meta: `${zone.code} · Source: ${country.source}`,
       timezone: zone.timezone,
       day,
+      monthHref: `/times/?country=${country.code}&zone=${zone.code}`,
       reload: () => show(countryCode, zoneCode),
     };
     render();
@@ -262,131 +171,30 @@
     } catch {}
   }
 
-  async function fillZones(countryCode: string, selected?: string) {
-    zoneSel.disabled = true;
-    const zones = await getZones(countryCode);
-    const byState = new Map<string, Zone[]>();
-    for (const z of zones)
-      byState.set(z.state, [...(byState.get(z.state) ?? []), z]);
-
-    const placeholder = new Option("Choose a zone", "");
-    const groups = [...byState].map(([state, list]) => {
-      const group = document.createElement("optgroup");
-      group.label = state;
-      for (const z of list) group.append(new Option(z.location, z.code));
-      return group;
-    });
-    zoneSel.replaceChildren(placeholder, ...groups);
-    zoneSel.value = selected ?? "";
-    zoneSel.disabled = false;
-  }
-
-  // Ray casting: is the point inside this ring?
-  function inRing([x, y]: [number, number], ring: Ring): boolean {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i];
-      const [xj, yj] = ring[j];
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-        inside = !inside;
-      }
-    }
-    return inside;
-  }
-
-  function inPolygon(point: [number, number], rings: Ring[]): boolean {
-    const [outer, ...holes] = rings;
-    return inRing(point, outer) && !holes.some((h) => inRing(point, h));
-  }
-
-  function contains(
-    geometry: Geometry | null,
-    point: [number, number],
-  ): boolean {
-    // Some boundary files include a region with no shape at all; skip those.
-    if (!geometry) return false;
-    if (geometry.type === "Polygon")
-      return inPolygon(point, geometry.coordinates);
-    if (geometry.type === "MultiPolygon")
-      return geometry.coordinates.some((poly) => inPolygon(point, poly));
-    return false;
-  }
-
   async function locate() {
-    if (!("geolocation" in navigator)) {
-      setStatus(
-        "Your browser can't share your location. Choose a zone instead.",
-      );
-      return;
-    }
     setStatus("Finding your location…");
-    const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 15000,
-        maximumAge: 10 * 60 * 1000,
-      }),
-    ).catch(() => null);
+    const pos = await getPosition();
     if (!pos) {
       setStatus("Couldn't get your location. Choose a zone instead.");
       return;
     }
-
-    const point: [number, number] = [pos.coords.longitude, pos.coords.latitude];
-    const candidates = countries.filter((c) => {
-      const b = BOXES[c.code];
-      return (
-        b &&
-        point[0] >= b[0] &&
-        point[0] <= b[2] &&
-        point[1] >= b[1] &&
-        point[1] <= b[3]
-      );
-    });
-
-    for (const country of candidates) {
-      setStatus(`Checking the zones for ${country.name}…`);
-      const geo = JSON.parse(await fetchText(country.geojson)) as {
-        features: Feature[];
-      };
-      const feature = geo.features.find((f) => contains(f.geometry, point));
-      if (!feature) continue;
-
-      const mapping = JSON.parse(await fetchText(country.mapping)) as Record<
-        string,
-        { zone: string }
-      >;
-      const entry = mapping[feature.properties[country.shape_property]];
-      if (!entry) continue;
-
-      countrySel.value = country.code;
-      await fillZones(country.code, entry.zone);
-      await show(country.code, entry.zone);
+    const { latitude: lat, longitude: lng } = pos.coords;
+    const found = await findZone(countries, lat, lng, setStatus);
+    if (found) {
+      countrySel.value = found.country.code;
+      await fillZones(zoneSel, found.country.code, found.zone);
+      await show(found.country.code, found.zone);
       return;
     }
-
-    await showCalculated(pos.coords.latitude, pos.coords.longitude);
+    await showCalculated(lat, lng);
   }
 
   // Outside the countries with an official timetable, calculate the times
   // here in the browser, with the method the app uses for that country.
   async function showCalculated(lat: number, lng: number) {
     setStatus("Calculating prayer times for your location…");
-    let country: { ISO_A2: string; NAME: string } | null = null;
-    try {
-      const res = await fetch("/geodata/countries-adm0-web.json");
-      const world = (await res.json()) as {
-        features: (Feature & {
-          properties: { ISO_A2: string; NAME: string };
-        })[];
-      };
-      country =
-        world.features.find((f) => contains(f.geometry, [lng, lat]))
-          ?.properties ?? null;
-    } catch {
-      // Without the country, the default method is used.
-    }
-
+    // Without the country, the default method is used.
+    const country = await findWorldCountry(lat, lng);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const { label, times } = calculateDay(
       new Date(),
@@ -404,6 +212,9 @@
       meta: `Calculated (${label}). No official timetable here.`,
       timezone,
       day: { date: nowIn(timezone).date, ...times },
+      // Rounded to about a kilometre: close enough for prayer times, and
+      // the link doesn't give away an exact location if it's shared.
+      monthHref: `/times/?lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}`,
       reload: () => showCalculated(lat, lng),
     };
     render();
@@ -412,10 +223,7 @@
 
   async function init() {
     try {
-      const doc = load(await fetchText("/countries.yaml")) as {
-        countries: Country[];
-      };
-      countries = doc.countries;
+      countries = await getCountries();
     } catch {
       setStatus("Couldn't load the list of countries. Please try again later.");
       return;
@@ -430,7 +238,7 @@
     countrySel.addEventListener("change", async () => {
       result.hidden = true;
       current = null;
-      if (countrySel.value) await fillZones(countrySel.value);
+      if (countrySel.value) await fillZones(zoneSel, countrySel.value);
     });
     zoneSel.addEventListener("change", () => {
       if (zoneSel.value)
@@ -460,7 +268,7 @@
     } catch {}
     if (saved && countries.some((c) => c.code === saved[0])) {
       countrySel.value = saved[0];
-      await fillZones(saved[0], saved[1]);
+      await fillZones(zoneSel, saved[0], saved[1]);
       await show(saved[0], saved[1]).catch(() => {});
     }
   }
@@ -543,6 +351,9 @@
   .times :global(tr.active th),
   .times :global(tr.active td) {
     font-weight: 700;
+  }
+  .month {
+    margin: 0.75rem 0 0;
   }
   .note,
   .privacy {

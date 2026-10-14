@@ -1,0 +1,559 @@
+---
+// A whole month of prayer times for a zone (or, outside the countries with an
+// official timetable, calculated for a location). Runs in the browser like
+// the live times on the home page. The address keeps the place and month
+// (?country=MY&zone=SGR01&month=2026-10, or ?lat=..&lng=..), so it can be
+// bookmarked or shared, and it prints as a one-page timetable.
+import Base from "../layouts/Base.astro";
+---
+
+<Base
+  title="Monthly prayer times"
+  description="A whole month of prayer times for your zone, from the official timetables (JAKIM and others). Print it or share the link."
+>
+  <section class="month-page" aria-labelledby="month-heading">
+    <h1 id="month-heading">Monthly prayer times</h1>
+
+    <div class="controls">
+      <button type="button" class="button" id="locate">
+        Use my location
+      </button>
+      <span class="muted or">or</span>
+      <label>
+        <span class="sr-only">Country</span>
+        <select id="country" disabled>
+          <option value="">Loading countries…</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">Zone</span>
+        <select id="zone" disabled>
+          <option value="">Choose a zone</option>
+        </select>
+      </label>
+    </div>
+
+    <p id="status" class="status muted" aria-live="polite"></p>
+
+    <div id="result" hidden>
+      <div class="heading-row">
+        <p class="place">
+          <strong id="place"></strong>
+          <br />
+          <span id="meta" class="muted"></span>
+          <span class="print-only muted"> · simplesolat.com/times</span>
+        </p>
+        <div class="month-nav">
+          <button type="button" class="button secondary" id="prev">
+            <span aria-hidden="true">‹</span>
+            <span class="sr-only">Previous month</span>
+          </button>
+          <strong id="month-name" aria-live="polite"></strong>
+          <button type="button" class="button secondary" id="next">
+            <span aria-hidden="true">›</span>
+            <span class="sr-only">Next month</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="month-table">
+          <thead>
+            <tr id="head"></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <p class="note muted">
+        12-hour times. Fajr ends at Syuruk (sunrise). Today is highlighted and
+        Fridays are in bold.
+      </p>
+      <p class="actions">
+        <button type="button" class="button secondary" id="print">
+          Print
+        </button>
+        <button type="button" class="button secondary" id="copy">
+          Copy link
+        </button>
+        <span id="copied" class="muted" aria-live="polite"></span>
+      </p>
+    </div>
+
+    <p class="privacy muted">
+      Your location stays in your browser. It's matched against zone boundaries
+      right here, and only your zone's timetable is downloaded.
+    </p>
+  </section>
+</Base>
+
+<script>
+  import { calculateDay } from "../lib/calculate";
+  import {
+    type Country,
+    type Day,
+    ROWS,
+    STORE_KEY,
+    fillZones,
+    findWorldCountry,
+    findZone,
+    getCountries,
+    getMonth,
+    getPosition,
+    getZones,
+    nowIn,
+    to12h,
+  } from "../lib/times";
+
+  const el = <T extends HTMLElement>(id: string) =>
+    document.getElementById(id) as T;
+  const countrySel = el<HTMLSelectElement>("country");
+  const zoneSel = el<HTMLSelectElement>("zone");
+  const status = el<HTMLParagraphElement>("status");
+  const result = el<HTMLDivElement>("result");
+
+  let countries: Country[] = [];
+
+  // The place on screen: an official zone, or a location to calculate for.
+  type Place =
+    | { kind: "zone"; country: string; zone: string }
+    | { kind: "point"; lat: number; lng: number };
+  let place: Place | null = null;
+  let month = ""; // "YYYY-MM"
+
+  const setStatus = (text: string) => (status.textContent = text);
+
+  function shiftMonth(m: string, by: number): string {
+    const [y, mo] = m.split("-").map(Number);
+    const d = new Date(y, mo - 1 + by, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  // The address for what's on screen, so it can be bookmarked or shared.
+  function updateUrl() {
+    if (!place) return;
+    const params = new URLSearchParams();
+    if (place.kind === "zone") {
+      params.set("country", place.country);
+      params.set("zone", place.zone);
+    } else {
+      params.set("lat", place.lat.toFixed(2));
+      params.set("lng", place.lng.toFixed(2));
+    }
+    params.set("month", month);
+    history.replaceState(null, "", `?${params}`);
+  }
+
+  function renderTable(days: Day[], today: string) {
+    // Only the columns this timetable has: no Dhuha outside Malaysia and
+    // Brunei.
+    const cols = ROWS.filter(([key]) => days.some((d) => d[key]));
+    const th = (text: string) => {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = text;
+      return cell;
+    };
+    el("head").replaceChildren(
+      th("Date"),
+      ...cols.map(([, label]) => th(label)),
+    );
+
+    el("rows").replaceChildren(
+      ...days.map((day) => {
+        const date = new Date(`${day.date}T00:00:00`);
+        const tr = document.createElement("tr");
+        if (date.getDay() === 5) tr.classList.add("friday");
+        if (day.date === today) tr.classList.add("today");
+        const head = document.createElement("th");
+        head.scope = "row";
+        head.textContent = date.toLocaleDateString("en-GB", {
+          weekday: "short",
+          day: "numeric",
+        });
+        tr.append(
+          head,
+          ...cols.map(([key]) => {
+            const td = document.createElement("td");
+            const t = day[key];
+            td.textContent = t ? to12h(t, false) : "–";
+            return td;
+          }),
+        );
+        return tr;
+      }),
+    );
+  }
+
+  async function render() {
+    if (!place) return;
+    const [y, m] = month.split("-").map(Number);
+    el("month-name").textContent = new Date(y, m - 1, 1).toLocaleDateString(
+      "en-GB",
+      { month: "long", year: "numeric" },
+    );
+
+    if (place.kind === "zone") {
+      const { country: cc, zone: zc } = place;
+      const country = countries.find((c) => c.code === cc);
+      const zone = (await getZones(cc)).find((z) => z.code === zc);
+      if (!country || !zone) {
+        setStatus("That zone wasn't found. Choose one below.");
+        return;
+      }
+      el("place").textContent = `${zone.location}, ${zone.state}`;
+      el("meta").textContent = `${zone.code} · Source: ${country.source}`;
+      setStatus(`Loading prayer times for ${zone.location}…`);
+      let days: Day[];
+      try {
+        days = await getMonth(cc, zc, month);
+      } catch {
+        // Keep the place and the month buttons, so another month is a tap
+        // away.
+        el("rows").replaceChildren();
+        el("head").replaceChildren();
+        result.hidden = false;
+        setStatus(
+          "This month's timetable isn't available for this zone yet. Try another month.",
+        );
+        updateUrl();
+        return;
+      }
+      renderTable(days, nowIn(zone.timezone).date);
+      document.title = `${zone.location}, ${el("month-name").textContent} · simplesolat`;
+    } else {
+      const { lat, lng } = place;
+      setStatus("Calculating prayer times for your location…");
+      const country = await findWorldCountry(lat, lng);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const count = new Date(y, m, 0).getDate();
+      let label = "";
+      const days: Day[] = [];
+      for (let d = 1; d <= count; d++) {
+        const r = calculateDay(
+          new Date(y, m - 1, d, 12),
+          lat,
+          lng,
+          country?.ISO_A2 ?? null,
+          timezone,
+        );
+        label = r.label;
+        days.push({
+          date: `${month}-${String(d).padStart(2, "0")}`,
+          ...r.times,
+        });
+      }
+      el("place").textContent = country
+        ? `Near ${lat.toFixed(2)}, ${lng.toFixed(2)}, ${country.NAME}`
+        : `Near ${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+      el("meta").textContent =
+        `Calculated (${label}). No official timetable here.`;
+      renderTable(days, nowIn(timezone).date);
+    }
+    result.hidden = false;
+    setStatus("");
+    updateUrl();
+  }
+
+  async function showZone(countryCode: string, zoneCode: string) {
+    place = { kind: "zone", country: countryCode, zone: zoneCode };
+    const zone = (await getZones(countryCode)).find((z) => z.code === zoneCode);
+    if (!month && zone) month = nowIn(zone.timezone).date.slice(0, 7);
+    await render();
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify([countryCode, zoneCode]));
+    } catch {}
+  }
+
+  async function locate() {
+    setStatus("Finding your location…");
+    const pos = await getPosition();
+    if (!pos) {
+      setStatus("Couldn't get your location. Choose a zone instead.");
+      return;
+    }
+    const { latitude: lat, longitude: lng } = pos.coords;
+    const found = await findZone(countries, lat, lng, setStatus);
+    if (found) {
+      countrySel.value = found.country.code;
+      await fillZones(zoneSel, found.country.code, found.zone);
+      await showZone(found.country.code, found.zone);
+      return;
+    }
+    countrySel.value = "";
+    zoneSel.replaceChildren(new Option("Choose a zone", ""));
+    zoneSel.disabled = true;
+    place = { kind: "point", lat, lng };
+    await render();
+  }
+
+  async function init() {
+    try {
+      countries = await getCountries();
+    } catch {
+      setStatus("Couldn't load the list of countries. Please try again later.");
+      return;
+    }
+    countrySel.replaceChildren(
+      new Option("Choose a country", ""),
+      ...countries.map((c) => new Option(c.name, c.code)),
+    );
+    countrySel.disabled = false;
+
+    countrySel.addEventListener("change", async () => {
+      result.hidden = true;
+      place = null;
+      if (countrySel.value) await fillZones(zoneSel, countrySel.value);
+    });
+    zoneSel.addEventListener("change", () => {
+      if (zoneSel.value)
+        showZone(countrySel.value, zoneSel.value).catch(() =>
+          setStatus("Couldn't load the prayer times. Please try again."),
+        );
+    });
+    el("locate").addEventListener("click", () =>
+      locate().catch(() =>
+        setStatus("Something went wrong. Choose a zone instead."),
+      ),
+    );
+    el("prev").addEventListener("click", () => {
+      month = shiftMonth(month, -1);
+      render().catch(() => setStatus("Couldn't load the prayer times."));
+    });
+    el("next").addEventListener("click", () => {
+      month = shiftMonth(month, 1);
+      render().catch(() => setStatus("Couldn't load the prayer times."));
+    });
+    el("print").addEventListener("click", () => window.print());
+    el("copy").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        el("copied").textContent = "Copied.";
+      } catch {
+        el("copied").textContent = "Copy the address from the address bar.";
+      }
+      setTimeout(() => (el("copied").textContent = ""), 3000);
+    });
+
+    // A shared or bookmarked link first, then the zone chosen last time.
+    const params = new URLSearchParams(location.search);
+    const m = params.get("month");
+    if (m && /^\d{4}-\d{2}$/.test(m)) month = m;
+    const lat = Number(params.get("lat"));
+    const lng = Number(params.get("lng"));
+    const cc = params.get("country");
+    const zc = params.get("zone");
+
+    if (cc && zc && countries.some((c) => c.code === cc)) {
+      countrySel.value = cc;
+      await fillZones(zoneSel, cc, zc);
+      await showZone(cc, zc);
+      return;
+    }
+    if (
+      params.has("lat") &&
+      params.has("lng") &&
+      isFinite(lat) &&
+      isFinite(lng)
+    ) {
+      if (!month)
+        month = nowIn(
+          Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ).date.slice(0, 7);
+      place = { kind: "point", lat, lng };
+      await render();
+      return;
+    }
+    let saved: [string, string] | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
+    } catch {}
+    if (saved && countries.some((c) => c.code === saved[0])) {
+      countrySel.value = saved[0];
+      await fillZones(zoneSel, saved[0], saved[1]);
+      await showZone(saved[0], saved[1]).catch(() => {});
+    }
+  }
+
+  init();
+</script>
+
+<style>
+  .month-page h1 {
+    margin-bottom: 1rem;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .or {
+    font-size: 0.9rem;
+  }
+  .controls label {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+  select {
+    width: 100%;
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 100%;
+  }
+  .status:empty {
+    display: none;
+  }
+  .heading-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 1.25rem 0 0.75rem;
+  }
+  .place {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  .place .muted {
+    font-size: 0.85rem;
+  }
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .month-nav .button {
+    padding: 0.3rem 0.8rem;
+  }
+  .table-wrap {
+    overflow-x: auto;
+  }
+  .month-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The rows are created by the script, so Astro's scoped styles don't reach
+     them: these rules have to be global. */
+  .month-table :global(th),
+  .month-table :global(td) {
+    padding: 0.3rem 0.5rem;
+    text-align: right;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  .month-table :global(thead th) {
+    font-weight: 700;
+    border-bottom: 1px solid var(--text);
+  }
+  .month-table :global(th:first-child) {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: var(--bg);
+  }
+  .month-table :global(tbody tr) {
+    border-bottom: 1px solid var(--border);
+  }
+  .month-table :global(tr.friday) {
+    font-weight: 700;
+  }
+  .month-table :global(tr.friday th),
+  .month-table :global(tr.friday td) {
+    font-weight: 700;
+  }
+  .month-table :global(tr.today),
+  .month-table :global(tr.today th) {
+    background: var(--highlight);
+    color: var(--highlight-text);
+  }
+  .note,
+  .privacy {
+    font-size: 0.85rem;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .print-only {
+    display: none;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Phones: small enough that the whole row fits without scrolling. */
+  @media (max-width: 30rem) {
+    .month-table {
+      font-size: 0.66rem;
+    }
+    .month-table :global(th),
+    .month-table :global(td) {
+      padding: 0.3rem 0.12rem;
+    }
+  }
+
+  /* Printed: just the place, the month and the table, on one page. */
+  @media print {
+    :global(.site-header),
+    :global(.site-footer),
+    .controls,
+    .status,
+    .privacy,
+    .actions,
+    .month-nav .button,
+    h1 {
+      display: none !important;
+    }
+    :global(body) {
+      background: #fff;
+      color: #000;
+    }
+    .heading-row {
+      margin-top: 0;
+    }
+    @page {
+      margin: 12mm;
+    }
+    .place {
+      font-size: 11pt;
+    }
+    .month-table {
+      font-size: 9pt;
+    }
+    .month-table :global(th),
+    .month-table :global(td) {
+      padding: 0.06rem 0.4rem;
+    }
+    .note {
+      margin: 0.4rem 0 0;
+    }
+    .month-table :global(th:first-child) {
+      background: #fff;
+    }
+    .month-table :global(tr.today),
+    .month-table :global(tr.today th) {
+      background: #fff;
+      color: #000;
+      outline: 1.5pt solid #000;
+    }
+    .print-only {
+      display: inline;
+    }
+  }
+</style>
