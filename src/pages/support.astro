@@ -12,8 +12,8 @@ import { SITE } from "../lib/site";
   <h2>Contact</h2>
   <p>
     Email <a href={`mailto:${SITE.supportEmail}`}>{SITE.supportEmail}</a>. Tell
-    me your phone model, your Android version and what happened, and I'll get
-    back to you.
+    me your phone model, your Android or iOS version and what happened, and I'll
+    get back to you.
   </p>
   <p>
     If you have a GitHub account, you can also
@@ -24,11 +24,11 @@ import { SITE } from "../lib/site";
 
   <h3>Reminders arrive late, or not at all</h3>
   <p>
-    First check that notifications are allowed for simplesolat (Settings ›
-    Apps › simplesolat › Notifications).
+    First check that notifications are allowed for simplesolat (Settings › Apps
+    › simplesolat › Notifications).
   </p>
   <p>
-    Many Android phones also stop apps running in the background to save
+    On Android, many phones also stop apps running in the background to save
     battery, which delays reminders and widget updates. Set simplesolat's
     battery usage to <em>Unrestricted</em> (usually under Settings › Apps ›
     simplesolat › Battery), and allow <em>Alarms &amp; reminders</em> if your
@@ -36,13 +36,23 @@ import { SITE } from "../lib/site";
     <a href="https://dontkillmyapp.com/">Don't kill my app!</a> has a guide for
     each one.
   </p>
+  <p>
+    On iPhone, reminders are set about 12 days ahead, and a short note reminds
+    you to open the app before they run out. Opening simplesolat now and then
+    keeps them coming.
+  </p>
 
   <h3>The widget isn't updating</h3>
   <p>
-    It's usually the same battery setting as above. Widgets refresh in the
-    background about every 15 minutes, and when a prayer time begins. To follow
-    you when you travel, the app also needs location access
+    On Android, it's usually the same battery setting as above. Widgets refresh
+    in the background about every 15 minutes, and when a prayer time begins. To
+    follow you when you travel, the app also needs location access
     <em>all the time</em>, not only while it's open.
+  </p>
+  <p>
+    On iPhone, open simplesolat once before adding the widget, so it has the
+    times to show. To follow you when you travel, allow location
+    <em>Always</em> (Settings › simplesolat › Location).
   </p>
 
   <h3>It shows the wrong zone</h3>
@@ -54,15 +64,15 @@ import { SITE } from "../lib/site";
 
   <h3>The app closes as soon as I open it</h3>
   <p>
-    Update simplesolat from
+    On Android, update simplesolat from
     <a href={SITE.playStore}>Google Play</a> first. Version 1.1.2 fixes a crash
     when opening the app.
   </p>
   <p>
     If it still closes, clear the app's data: Settings › Apps › simplesolat ›
     Storage › <em>Clear data</em>. You won't lose anything important; the app
-    finds your zone again and downloads the times. If that doesn't help,
-    email me.
+    finds your zone again and downloads the times. If that doesn't help, email
+    me.
   </p>
 
   <h3>The times are slightly different from my mosque</h3>
