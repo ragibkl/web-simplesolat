@@ -7,6 +7,7 @@ import { SITE, SOURCES } from "../lib/site";
 
 import widgets from "../assets/widgets.jpeg";
 import widgetsDark from "../assets/widgets-dark.jpeg";
+import iphoneWidget from "../assets/iphone-widget.jpeg";
 import main from "../assets/screen-main-1.jpeg";
 import mainDark from "../assets/screen-main-dark-1.jpeg";
 import qibla from "../assets/screen-qibla.jpeg";
@@ -20,6 +21,10 @@ const shots = [
     src: widgets,
     alt: "Four simplesolat widget styles on an Android home screen",
   },
+  {
+    src: iphoneWidget,
+    alt: "The simplesolat widget on an iPhone home screen, showing the current prayer and a countdown to the next",
+  },
   { src: mainDark, alt: "The app in dark mode" },
   { src: widgetsDark, alt: "The widgets in dark mode" },
   { src: qibla, alt: "The Qibla compass" },
@@ -31,14 +36,17 @@ const shots = [
     <h1>simplesolat</h1>
     <p class="tagline">{SITE.tagline}</p>
     <p>
-      A free prayer times app for Android. Home screen widgets that follow you
-      when you travel, reminders for every prayer, and all seven times,
-      including Syuruk. No ads, no account, and your location never leaves your
-      phone.
+      A free prayer times app for Android and iPhone. Home screen widgets that
+      follow you when you travel, reminders for every prayer, and all seven
+      times, including Syuruk. No ads, no account, and your location never
+      leaves your phone.
     </p>
     <p class="actions">
       <a class="button" href={SITE.playStore}>
         Get it on Google Play
+      </a>
+      <a class="button" href={SITE.appStore}>
+        Download on the App Store
       </a>
       <a class="button secondary" href="#times">
         See today's times
