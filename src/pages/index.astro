@@ -158,10 +158,26 @@ const shots = [
 
   <h2 id="developers">For developers</h2>
   <p>
-    The prayer times behind simplesolat are public: static files on a CDN, with
-    zones, boundaries and monthly timetables, readable from any website. This
-    page reads them straight from your browser. See
-    <a href={SITE.data}>simplesolat-data</a> for the format and the sources.
+    The prayer times behind simplesolat are open and free to use in your own app
+    or website:
+  </p>
+  <ul>
+    <li>
+      <a href={SITE.data}>simplesolat-data</a>: the official timetables, zones
+      and zone boundaries as static files on a CDN, MIT licensed. This page reads
+      them straight from your browser.
+    </li>
+    <li>
+      <a href={SITE.apiDocs}>simplesolat API</a>: the same data as a simple JSON
+      API at <code>api.simplesolat.com</code>. Find the zone for a GPS location,
+      then get its times for a day, a month or a year. No key needed, and you
+      can run your own copy.
+    </li>
+  </ul>
+  <p>
+    Spotted a wrong time or zone? Please
+    <a href={SITE.dataIssues}>report it on GitHub</a>, or send a fix. Keeping
+    the data accurate is easier together.
   </p>
 
   <h2 id="story">Why it exists</h2>
