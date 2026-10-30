@@ -3,8 +3,13 @@
 // official timetable, calculated for a location). Runs in the browser like
 // the live times on the home page. The address keeps the place and month
 // (?country=MY&zone=SGR01&month=2026-10, or ?lat=..&lng=..), so it can be
-// bookmarked or shared, and it prints as a one-page timetable.
-import Base from "../layouts/Base.astro";
+// bookmarked or shared, and it prints as a one-page timetable. Countries
+// with zone pages are also listed below, and their zone links go there.
+import Base from "../../layouts/Base.astro";
+import MonthTable from "../../components/MonthTable.astro";
+import { countryPath, getPageCountries } from "../../lib/zonePages";
+
+const pageCountries = await getPageCountries();
 ---
 
 <Base
@@ -12,9 +17,11 @@ import Base from "../layouts/Base.astro";
   description="A whole month of prayer times for your zone, from the official timetables (JAKIM and others). Print it or share the link."
 >
   <section class="month-page" aria-labelledby="month-heading">
-    <h1 id="month-heading">Monthly prayer times</h1>
+    <h1 id="month-heading" class="no-print">
+      Monthly prayer times
+    </h1>
 
-    <div class="controls">
+    <div class="controls no-print">
       <button type="button" class="button" id="locate">
         Use my location
       </button>
@@ -33,66 +40,42 @@ import Base from "../layouts/Base.astro";
       </label>
     </div>
 
-    <p id="status" class="status muted" aria-live="polite"></p>
+    <p id="status" class="status muted no-print" aria-live="polite"></p>
 
     <div id="result" hidden>
-      <div class="heading-row">
-        <p class="place">
-          <strong id="place"></strong>
-          <br />
-          <span id="meta" class="muted"></span>
-          <span class="print-only muted"> · simplesolat.com/times</span>
-        </p>
-        <div class="month-nav">
-          <button type="button" class="button secondary" id="prev">
-            <span aria-hidden="true">‹</span>
-            <span class="sr-only">Previous month</span>
-          </button>
-          <strong id="month-name" aria-live="polite"></strong>
-          <button type="button" class="button secondary" id="next">
-            <span aria-hidden="true">›</span>
-            <span class="sr-only">Next month</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table class="month-table">
-          <thead>
-            <tr id="head"></tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
-
-      <p class="note muted">
-        12-hour times. Fajr ends at Syuruk (sunrise). Today is highlighted and
-        Fridays are in bold.
-      </p>
-      <p class="actions">
-        <button type="button" class="button secondary" id="print">
-          Print
-        </button>
-        <button type="button" class="button secondary" id="copy">
-          Copy link
-        </button>
-        <span id="copied" class="muted" aria-live="polite"></span>
-      </p>
+      <MonthTable printUrl="simplesolat.com/times" />
     </div>
 
-    <p class="privacy muted">
+    <p class="privacy muted no-print">
       Your location stays in your browser. It's matched against zone boundaries
       right here, and only your zone's timetable is downloaded.
     </p>
   </section>
+
+  <section class="browse no-print" aria-labelledby="browse-heading">
+    <h2 id="browse-heading">Browse by country</h2>
+    <ul class="countries">
+      {pageCountries.map((c) => (
+        <li>
+          <a href={countryPath(c.code)}>{c.country.name}</a>
+          <span class="muted">
+            {" "}
+            · {c.zones.length} {c.zones.length === 1 ? "zone" : "zones"} ·{" "}
+            {c.country.source}
+          </span>
+        </li>
+      ))}
+    </ul>
+  </section>
 </Base>
 
 <script>
-  import { calculateDay } from "../lib/calculate";
+  import { calculateDay } from "../../lib/calculate";
+  import { monthName, renderMonthTable, shiftMonth } from "../../lib/month";
+  import { hasZonePages, zonePath } from "../../lib/zonePages";
   import {
     type Country,
     type Day,
-    ROWS,
     STORE_KEY,
     fillZones,
     findWorldCountry,
@@ -102,8 +85,7 @@ import Base from "../layouts/Base.astro";
     getPosition,
     getZones,
     nowIn,
-    to12h,
-  } from "../lib/times";
+  } from "../../lib/times";
 
   const el = <T extends HTMLElement>(id: string) =>
     document.getElementById(id) as T;
@@ -123,12 +105,6 @@ import Base from "../layouts/Base.astro";
 
   const setStatus = (text: string) => (status.textContent = text);
 
-  function shiftMonth(m: string, by: number): string {
-    const [y, mo] = m.split("-").map(Number);
-    const d = new Date(y, mo - 1 + by, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  }
-
   // The address for what's on screen, so it can be bookmarked or shared.
   function updateUrl() {
     if (!place) return;
@@ -144,54 +120,13 @@ import Base from "../layouts/Base.astro";
     history.replaceState(null, "", `?${params}`);
   }
 
-  function renderTable(days: Day[], today: string) {
-    // Only the columns this timetable has: no Dhuha outside Malaysia and
-    // Brunei.
-    const cols = ROWS.filter(([key]) => days.some((d) => d[key]));
-    const th = (text: string) => {
-      const cell = document.createElement("th");
-      cell.scope = "col";
-      cell.textContent = text;
-      return cell;
-    };
-    el("head").replaceChildren(
-      th("Date"),
-      ...cols.map(([, label]) => th(label)),
-    );
-
-    el("rows").replaceChildren(
-      ...days.map((day) => {
-        const date = new Date(`${day.date}T00:00:00`);
-        const tr = document.createElement("tr");
-        if (date.getDay() === 5) tr.classList.add("friday");
-        if (day.date === today) tr.classList.add("today");
-        const head = document.createElement("th");
-        head.scope = "row";
-        head.textContent = date.toLocaleDateString("en-GB", {
-          weekday: "short",
-          day: "numeric",
-        });
-        tr.append(
-          head,
-          ...cols.map(([key]) => {
-            const td = document.createElement("td");
-            const t = day[key];
-            td.textContent = t ? to12h(t, false) : "–";
-            return td;
-          }),
-        );
-        return tr;
-      }),
-    );
-  }
+  const renderTable = (days: Day[], today: string) =>
+    renderMonthTable(el("head"), el("rows"), days, today);
 
   async function render() {
     if (!place) return;
     const [y, m] = month.split("-").map(Number);
-    el("month-name").textContent = new Date(y, m - 1, 1).toLocaleDateString(
-      "en-GB",
-      { month: "long", year: "numeric" },
-    );
+    el("month-name").textContent = monthName(month);
 
     if (place.kind === "zone") {
       const { country: cc, zone: zc } = place;
@@ -344,6 +279,11 @@ import Base from "../layouts/Base.astro";
     const cc = params.get("country");
     const zc = params.get("zone");
 
+    // Zones with their own page open there (old links and the home page).
+    if (cc && zc && hasZonePages(cc)) {
+      location.replace(zonePath(cc, zc) + (m ? `?month=${m}` : ""));
+      return;
+    }
     if (cc && zc && countries.some((c) => c.code === cc)) {
       countrySel.value = cc;
       await fillZones(zoneSel, cc, zc);
@@ -409,84 +349,14 @@ import Base from "../layouts/Base.astro";
   .status:empty {
     display: none;
   }
-  .heading-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin: 1.25rem 0 0.75rem;
-  }
-  .place {
-    margin: 0;
-    font-size: 1.1rem;
-  }
-  .place .muted {
-    font-size: 0.85rem;
-  }
-  .month-nav {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-  .month-nav .button {
-    padding: 0.3rem 0.8rem;
-  }
-  .table-wrap {
-    overflow-x: auto;
-  }
-  .month-table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 0.95rem;
-    font-variant-numeric: tabular-nums;
-  }
-  /* The rows are created by the script, so Astro's scoped styles don't reach
-     them: these rules have to be global. */
-  .month-table :global(th),
-  .month-table :global(td) {
-    padding: 0.3rem 0.5rem;
-    text-align: right;
-    font-weight: 400;
-    white-space: nowrap;
-  }
-  .month-table :global(thead th) {
-    font-weight: 700;
-    border-bottom: 1px solid var(--text);
-  }
-  .month-table :global(th:first-child) {
-    text-align: left;
-    position: sticky;
-    left: 0;
-    background: var(--bg);
-  }
-  .month-table :global(tbody tr) {
-    border-bottom: 1px solid var(--border);
-  }
-  .month-table :global(tr.friday) {
-    font-weight: 700;
-  }
-  .month-table :global(tr.friday th),
-  .month-table :global(tr.friday td) {
-    font-weight: 700;
-  }
-  .month-table :global(tr.today),
-  .month-table :global(tr.today th) {
-    background: var(--highlight);
-    color: var(--highlight-text);
-  }
-  .note,
   .privacy {
     font-size: 0.85rem;
   }
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.6rem;
+  .countries {
+    padding-left: 1.2rem;
   }
-  .print-only {
-    display: none;
+  .countries li {
+    margin-block: 0.3rem;
   }
   .sr-only {
     position: absolute;
@@ -495,65 +365,5 @@ import Base from "../layouts/Base.astro";
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
-  }
-
-  /* Phones: small enough that the whole row fits without scrolling. */
-  @media (max-width: 30rem) {
-    .month-table {
-      font-size: 0.66rem;
-    }
-    .month-table :global(th),
-    .month-table :global(td) {
-      padding: 0.3rem 0.12rem;
-    }
-  }
-
-  /* Printed: just the place, the month and the table, on one page. */
-  @media print {
-    :global(.site-header),
-    :global(.site-footer),
-    .controls,
-    .status,
-    .privacy,
-    .actions,
-    .month-nav .button,
-    h1 {
-      display: none !important;
-    }
-    :global(body) {
-      background: #fff;
-      color: #000;
-    }
-    .heading-row {
-      margin-top: 0;
-    }
-    @page {
-      margin: 12mm;
-    }
-    .place {
-      font-size: 11pt;
-    }
-    .month-table {
-      font-size: 9pt;
-    }
-    .month-table :global(th),
-    .month-table :global(td) {
-      padding: 0.06rem 0.4rem;
-    }
-    .note {
-      margin: 0.4rem 0 0;
-    }
-    .month-table :global(th:first-child) {
-      background: #fff;
-    }
-    .month-table :global(tr.today),
-    .month-table :global(tr.today th) {
-      background: #fff;
-      color: #000;
-      outline: 1.5pt solid #000;
-    }
-    .print-only {
-      display: inline;
-    }
   }
 </style>

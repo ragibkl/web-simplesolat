@@ -1,0 +1,81 @@
+---
+// A country's zones, each linking to its timetable page.
+import Base from "../../../layouts/Base.astro";
+import {
+  byState,
+  getPageCountries,
+  zonePath,
+  type CountryWithZones,
+} from "../../../lib/zonePages";
+
+export async function getStaticPaths() {
+  const countries = await getPageCountries();
+  return countries.map((c) => ({ params: { country: c.slug }, props: { c } }));
+}
+
+const { c } = Astro.props as { c: CountryWithZones };
+const ms = c.lang === "ms";
+const groups = byState(c.zones);
+const single = c.zones.length === 1;
+
+const title = ms ? `Waktu Solat ${c.name}` : `Prayer times in ${c.name}`;
+const description = ms
+  ? `Waktu solat hari ini dan jadual bulanan untuk setiap zon di ${c.name}, dari ${c.country.source}. Prayer times for every zone in ${c.country.name}.`
+  : `Today's prayer times and the monthly timetable for every zone in ${c.name}, from ${c.country.source}.`;
+---
+
+<Base title={title} description={description} lang={c.lang}>
+  <nav class="crumbs muted" aria-label={ms ? "Laluan" : "Breadcrumb"}>
+    <a href="/times/">{ms ? "Jadual waktu solat" : "Timetables"}</a>
+    {" › "}
+    {c.name}
+  </nav>
+
+  <h1>{title}</h1>
+  <p class="lead">
+    {ms
+      ? `Pilih ${single ? "zon" : "zon anda"} untuk waktu solat hari ini dan jadual sebulan, yang boleh dicetak.`
+      : "Choose your zone for today's prayer times and the whole month, ready to print."}
+  </p>
+  <p class="muted source">
+    {ms ? "Sumber" : "Source"}: {c.country.source}
+    {ms && <span lang="en"> · Prayer times for {c.country.name}</span>}
+  </p>
+
+  {groups.map(([state, zones]) => (
+    <section class="state">
+      {groups.length > 1 && <h2>{state}</h2>}
+      <ul>
+        {zones.map((z) => (
+          <li>
+            <a href={zonePath(c.code, z.code)}>{z.location}</a>
+            <span class="muted"> · {z.code}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</Base>
+
+<style>
+  .crumbs {
+    font-size: 0.85rem;
+    margin: 1rem 0 0.5rem;
+  }
+  .lead {
+    font-size: 1.05rem;
+  }
+  .source {
+    font-size: 0.85rem;
+  }
+  .state h2 {
+    font-size: 1.1rem;
+    margin-top: 1.5rem;
+  }
+  .state ul {
+    padding-left: 1.2rem;
+  }
+  .state li {
+    margin-block: 0.3rem;
+  }
+</style>

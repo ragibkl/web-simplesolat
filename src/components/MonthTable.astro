@@ -1,0 +1,201 @@
+---
+// The month table with its place line, month buttons, Print and Copy link,
+// shared by /times/ and the zone pages. The page's script fills it in (see
+// src/lib/month.ts); it prints as a one-page timetable.
+import type { Lang } from "../lib/month";
+
+interface Props {
+  lang?: Lang;
+  // Shown after the place on the printout.
+  printUrl: string;
+  place?: string;
+  meta?: string;
+}
+
+const { lang = "en", printUrl, place = "", meta = "" } = Astro.props;
+const ms = lang === "ms";
+---
+
+<div class="month-block">
+  <div class="heading-row">
+    <p class="place">
+      <strong id="place">{place}</strong>
+      <br />
+      <span id="meta" class="muted">
+        {meta}
+      </span>
+      <span class="print-only muted"> · {printUrl}</span>
+    </p>
+    <div class="month-nav">
+      <button type="button" class="button secondary" id="prev">
+        <span aria-hidden="true">‹</span>
+        <span class="sr-only">
+          {ms ? "Bulan sebelumnya" : "Previous month"}
+        </span>
+      </button>
+      <strong id="month-name" aria-live="polite"></strong>
+      <button type="button" class="button secondary" id="next">
+        <span aria-hidden="true">›</span>
+        <span class="sr-only">{ms ? "Bulan berikutnya" : "Next month"}</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="month-table">
+      <thead>
+        <tr id="head"></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <p class="note muted">
+    {ms
+      ? "Waktu 12 jam. Subuh tamat pada Syuruk (matahari terbit). Hari ini diserlahkan dan hari Jumaat ditebalkan."
+      : "12-hour times. Fajr ends at Syuruk (sunrise). Today is highlighted and Fridays are in bold."}
+  </p>
+  <p class="actions">
+    <button type="button" class="button secondary" id="print">
+      {ms ? "Cetak" : "Print"}
+    </button>
+    <button type="button" class="button secondary" id="copy">
+      {ms ? "Salin pautan" : "Copy link"}
+    </button>
+    <span id="copied" class="muted" aria-live="polite"></span>
+  </p>
+</div>
+
+<style>
+  .heading-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 1.25rem 0 0.75rem;
+  }
+  .place {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  .place .muted {
+    font-size: 0.85rem;
+  }
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .month-nav .button {
+    padding: 0.3rem 0.8rem;
+  }
+  .table-wrap {
+    overflow-x: auto;
+  }
+  .month-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The rows are created by the script, so Astro's scoped styles don't reach
+     them: these rules have to be global. */
+  .month-table :global(th),
+  .month-table :global(td) {
+    padding: 0.3rem 0.5rem;
+    text-align: right;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  .month-table :global(thead th) {
+    font-weight: 700;
+    border-bottom: 1px solid var(--text);
+  }
+  .month-table :global(th:first-child) {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: var(--bg);
+  }
+  .month-table :global(tbody tr) {
+    border-bottom: 1px solid var(--border);
+  }
+  .month-table :global(tr.friday th),
+  .month-table :global(tr.friday td) {
+    font-weight: 700;
+  }
+  .month-table :global(tr.today),
+  .month-table :global(tr.today th) {
+    background: var(--highlight);
+    color: var(--highlight-text);
+  }
+  .note {
+    font-size: 0.85rem;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .print-only {
+    display: none;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Phones: small enough that the whole row fits without scrolling. */
+  @media (max-width: 30rem) {
+    .month-table {
+      font-size: 0.66rem;
+    }
+    .month-table :global(th),
+    .month-table :global(td) {
+      padding: 0.3rem 0.12rem;
+    }
+  }
+
+  /* Printed: just the place, the month and the table, on one page. The page
+     hides everything else with the .no-print class. */
+  @media print {
+    .actions,
+    .month-nav .button {
+      display: none !important;
+    }
+    .heading-row {
+      margin-top: 0;
+    }
+    .place {
+      font-size: 11pt;
+    }
+    .month-table {
+      font-size: 9pt;
+    }
+    .month-table :global(th),
+    .month-table :global(td) {
+      padding: 0.06rem 0.4rem;
+    }
+    .note {
+      margin: 0.4rem 0 0;
+    }
+    .month-table :global(th:first-child) {
+      background: #fff;
+    }
+    .month-table :global(tr.today),
+    .month-table :global(tr.today th) {
+      background: #fff;
+      color: #000;
+      outline: 1.5pt solid #000;
+    }
+    .print-only {
+      display: inline;
+    }
+  }
+</style>

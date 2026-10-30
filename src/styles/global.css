@@ -155,3 +155,20 @@ img {
 .site-footer a {
   color: var(--muted);
 }
+
+/* Printing a timetable (/times/ and the zone pages): only the month table.
+   Anything else on those pages gets .no-print. */
+@media print {
+  .site-header,
+  .site-footer,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

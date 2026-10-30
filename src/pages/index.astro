@@ -4,6 +4,7 @@ import { Image } from "astro:assets";
 import Base from "../layouts/Base.astro";
 import LiveTimes from "../components/LiveTimes.astro";
 import { SITE, SOURCES } from "../lib/site";
+import { countryPath, hasZonePages } from "../lib/zonePages";
 
 import widgets from "../assets/widgets.jpeg";
 import widgetsDark from "../assets/widgets-dark.jpeg";
@@ -121,7 +122,13 @@ const shots = [
     <tbody>
       {SOURCES.map((s) => (
         <tr>
-          <td>{s.country}</td>
+          <td>
+            {hasZonePages(s.code) ? (
+              <a href={countryPath(s.code)}>{s.country}</a>
+            ) : (
+              s.country
+            )}
+          </td>
           <td>
             <a href={s.url}>{s.authority}</a>
           </td>
@@ -164,8 +171,8 @@ const shots = [
   <ul>
     <li>
       <a href={SITE.data}>simplesolat-data</a>: the official timetables, zones
-      and zone boundaries as static files on a CDN, MIT licensed. This page reads
-      them straight from your browser.
+      and zone boundaries as static files on a CDN, MIT licensed. This page
+      reads them straight from your browser.
     </li>
     <li>
       <a href={SITE.apiDocs}>simplesolat API</a>: the same data as a simple JSON
