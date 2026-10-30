@@ -9,14 +9,16 @@ export type PageCountry = {
   code: string;
   slug: string;
   lang: Lang;
-  // The name used in page titles (Malay for the Malay pages).
+  // The name used in page titles.
   name: string;
 };
 
+// English for now (user, 2026-10-30); the pages can switch to Malay ("ms")
+// with the rest of the site.
 export const PAGE_COUNTRIES: PageCountry[] = [
-  { code: "BN", slug: "bn", lang: "ms", name: "Brunei" },
-  { code: "MY", slug: "my", lang: "ms", name: "Malaysia" },
-  { code: "SG", slug: "sg", lang: "ms", name: "Singapura" },
+  { code: "BN", slug: "bn", lang: "en", name: "Brunei" },
+  { code: "MY", slug: "my", lang: "en", name: "Malaysia" },
+  { code: "SG", slug: "sg", lang: "en", name: "Singapore" },
   { code: "LK", slug: "lk", lang: "en", name: "Sri Lanka" },
 ];
 
