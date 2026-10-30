@@ -75,6 +75,7 @@
     nowIn,
     to12h,
   } from "../lib/times";
+  import { hasZonePages, zonePath } from "../lib/zonePages";
 
   const el = <T extends HTMLElement>(id: string) =>
     document.getElementById(id) as T;
@@ -161,7 +162,9 @@
       meta: `${zone.code} · Source: ${country.source}`,
       timezone: zone.timezone,
       day,
-      monthHref: `/times/?country=${country.code}&zone=${zone.code}`,
+      monthHref: hasZonePages(country.code)
+        ? zonePath(country.code, zone.code)
+        : `/times/?country=${country.code}&zone=${zone.code}`,
       reload: () => show(countryCode, zoneCode),
     };
     render();

@@ -21,35 +21,51 @@ export const SITE = {
 export const SOURCES = [
   {
     country: "Malaysia",
+    code: "MY",
     authority: "JAKIM",
     url: "https://www.e-solat.gov.my",
   },
-  { country: "Singapore", authority: "MUIS", url: "https://data.gov.sg" },
+  {
+    country: "Singapore",
+    code: "SG",
+    authority: "MUIS",
+    url: "https://data.gov.sg",
+  },
   {
     country: "Indonesia",
+    code: "ID",
     authority: "Kemenag (via EQuran.id)",
     url: "https://equran.id",
   },
-  { country: "Brunei", authority: "KHEU", url: "https://www.mora.gov.bn" },
+  {
+    country: "Brunei",
+    code: "BN",
+    authority: "KHEU",
+    url: "https://www.mora.gov.bn",
+  },
   {
     country: "Sri Lanka",
+    code: "LK",
     authority: "ACJU",
     url: "https://www.acju.lk/prayer-times/",
   },
   {
     country: "Turkey",
+    code: "TR",
     authority: "Diyanet",
     url: "https://namazvakitleri.diyanet.gov.tr",
   },
   {
     country: "United Arab Emirates",
+    code: "AE",
     authority: "AWQAF",
     url: "https://www.awqaf.gov.ae",
   },
   {
     country: "Bosnia and Herzegovina",
+    code: "BA",
     authority: "IZ BiH (Vaktija)",
     url: "https://vaktija.ba",
   },
-  { country: "Albania", authority: "KMSH", url: "https://kmsh.al" },
+  { country: "Albania", code: "AL", authority: "KMSH", url: "https://kmsh.al" },
 ];

@@ -1,0 +1,355 @@
+---
+// One zone's prayer times: today at the top, then the whole month (printable).
+// The page itself is built once per zone; the times load from the CDN in the
+// browser, so new months and years need no rebuild.
+import Base from "../../../layouts/Base.astro";
+import MonthTable from "../../../components/MonthTable.astro";
+import { SITE } from "../../../lib/site";
+import {
+  countryPath,
+  getPageCountries,
+  zonePath,
+  type CountryWithZones,
+} from "../../../lib/zonePages";
+import type { Zone } from "../../../lib/times";
+
+export async function getStaticPaths() {
+  const countries = await getPageCountries();
+  return countries.flatMap((c) =>
+    c.zones.map((zone) => ({
+      params: { country: c.slug, zone: zone.code.toLowerCase() },
+      props: { c, zone },
+    })),
+  );
+}
+
+const { c, zone } = Astro.props as { c: CountryWithZones; zone: Zone };
+const ms = c.lang === "ms";
+const source = c.country.source;
+// Brunei's zone names already say "Daerah ..."; Malaysia's list the areas.
+const place = zone.location;
+const where =
+  zone.state && zone.state !== zone.location ? `${zone.state}, ` : "";
+
+const title = ms ? `Waktu Solat ${place}` : `Prayer times in ${place}`;
+const description = ms
+  ? `Waktu solat hari ini dan jadual bulanan untuk ${place}, ${where}${c.name} (${zone.code}), dari ${source}. Boleh dicetak. Prayer times today and this month.`
+  : `Today's prayer times and the monthly timetable for ${place}, ${where}${c.name}, from ${source}. Ready to print.`;
+
+const nearby = c.zones
+  .filter((z) => z.code !== zone.code)
+  .sort(
+    (a, b) => Number(b.state === zone.state) - Number(a.state === zone.state),
+  )
+  .slice(0, 12);
+---
+
+<Base title={title} description={description} lang={c.lang}>
+  <div
+    id="zone-page"
+    data-country={c.code}
+    data-zone={zone.code}
+    data-timezone={zone.timezone}
+    data-lang={c.lang}
+  >
+    <nav
+      class="crumbs muted no-print"
+      aria-label={ms ? "Laluan" : "Breadcrumb"}
+    >
+      <a href="/times/">{ms ? "Jadual waktu solat" : "Timetables"}</a>
+      {" › "}
+      <a href={countryPath(c.code)}>{c.name}</a>
+      {" › "}
+      {place}
+    </nav>
+
+    <h1 class="no-print">{title}</h1>
+    <p class="muted meta no-print">
+      {where}
+      {c.name} · {zone.code} · {ms ? "Sumber" : "Source"}: {source}
+      {ms && <span lang="en"> · Prayer times for {place}</span>}
+    </p>
+
+    <section class="today no-print" aria-labelledby="today-heading">
+      <h2 id="today-heading">{ms ? "Hari ini" : "Today"}</h2>
+      <p id="today-date" class="date"></p>
+      <table class="times">
+        <tbody id="today-rows"></tbody>
+      </table>
+      <p id="status" class="status muted" aria-live="polite">
+        {ms ? "Memuatkan waktu solat…" : "Loading prayer times…"}
+      </p>
+      <noscript>
+        <p>
+          {ms
+            ? `Waktu solat dimuatkan dengan JavaScript. Hidupkan JavaScript, atau rujuk ${source}.`
+            : `The times load with JavaScript. Turn it on, or see ${source}.`}
+        </p>
+      </noscript>
+    </section>
+
+    <section class="month" aria-labelledby="month-heading">
+      <h2 id="month-heading" class="no-print">
+        {ms ? "Jadual bulanan" : "Monthly timetable"}
+      </h2>
+      <MonthTable
+        lang={c.lang}
+        printUrl={`simplesolat.com${zonePath(c.code, zone.code)}`}
+        place={`${place}${where ? `, ${zone.state}` : ""}`}
+        meta={`${zone.code} · ${ms ? "Sumber" : "Source"}: ${source}`}
+      />
+    </section>
+
+    <section class="app no-print">
+      <p>
+        {ms
+          ? "Nak waktu solat terus di skrin utama telefon? simplesolat: widget yang sentiasa terkini dan peringatan waktu solat. Percuma, tiada iklan."
+          : "Want these times on your phone's home screen? simplesolat has widgets that keep themselves up to date, and reminders. Free, no ads."}
+      </p>
+      <p class="links">
+        <a href={SITE.playStore}>Google Play</a> ·
+        <a href={SITE.appStore}>App Store</a>
+      </p>
+    </section>
+
+    {nearby.length > 0 && (
+      <section class="nearby no-print">
+        <h2>{ms ? `Zon lain di ${c.name}` : `Other zones in ${c.name}`}</h2>
+        <ul>
+          {nearby.map((z) => (
+            <li>
+              <a href={zonePath(c.code, z.code)}>{z.location}</a>
+            </li>
+          ))}
+        </ul>
+        {c.zones.length - 1 > nearby.length && (
+          <p>
+            <a href={countryPath(c.code)}>
+              {ms
+                ? `Semua ${c.zones.length} zon di ${c.name} →`
+                : `All ${c.zones.length} zones in ${c.name} →`}
+            </a>
+          </p>
+        )}
+      </section>
+    )}
+  </div>
+</Base>
+
+<script>
+  import {
+    type Day,
+    STORE_KEY,
+    getMonth,
+    nowIn,
+    to12h,
+  } from "../../../lib/times";
+  import {
+    type Lang,
+    locale,
+    monthName,
+    renderMonthTable,
+    rowsFor,
+    shiftMonth,
+  } from "../../../lib/month";
+
+  const root = document.getElementById("zone-page") as HTMLElement;
+  const { country, zone, timezone } = root.dataset as Record<string, string>;
+  const lang = root.dataset.lang as Lang;
+  const ms = lang === "ms";
+  const el = <T extends HTMLElement>(id: string) =>
+    document.getElementById(id) as T;
+  const status = el<HTMLParagraphElement>("status");
+
+  // Remembered for the home page's live times, like choosing it there.
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify([country, zone]));
+  } catch {}
+
+  let month = nowIn(timezone).date.slice(0, 7);
+  let todayDay: Day | null = null;
+
+  const params = new URLSearchParams(location.search);
+  const asked = params.get("month");
+  if (asked && /^\d{4}-\d{2}$/.test(asked)) month = asked;
+
+  // Today's times, with the current one highlighted (same rule as the app:
+  // a time is current until the next one; Isha runs until midnight).
+  function renderToday() {
+    if (!todayDay) return;
+    const day = todayDay;
+    const now = nowIn(timezone);
+    const rows = rowsFor(lang).filter(([key]) => day[key] !== undefined);
+    let active = -1;
+    rows.forEach(([key], i) => {
+      const next = rows[i + 1];
+      if (now.time >= day[key]! && (!next || now.time < day[next[0]]!))
+        active = i;
+    });
+    el("today-date").textContent = new Date(
+      `${day.date}T00:00:00`,
+    ).toLocaleDateString(locale(lang), {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    el("today-rows").replaceChildren(
+      ...rows.map(([key, label], i) => {
+        const tr = document.createElement("tr");
+        if (i === active) tr.className = "active";
+        const th = document.createElement("th");
+        th.scope = "row";
+        th.textContent = label;
+        const td = document.createElement("td");
+        td.textContent = to12h(day[key]!);
+        tr.append(th, td);
+        return tr;
+      }),
+    );
+  }
+
+  async function loadToday() {
+    const today = nowIn(timezone).date;
+    const days = await getMonth(country, zone, today.slice(0, 7));
+    todayDay = days.find((d) => d.date === today) ?? null;
+    if (!todayDay) {
+      status.textContent = ms
+        ? "Jadual hari ini belum ada untuk zon ini."
+        : "Today's timetable isn't available for this zone yet.";
+      return;
+    }
+    status.textContent = "";
+    renderToday();
+  }
+
+  async function loadMonth() {
+    el("month-name").textContent = monthName(month, lang);
+    try {
+      const days = await getMonth(country, zone, month);
+      renderMonthTable(
+        el("head"),
+        el("rows"),
+        days,
+        nowIn(timezone).date,
+        lang,
+      );
+    } catch {
+      el("head").replaceChildren();
+      el("rows").replaceChildren();
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.textContent = ms
+        ? "Jadual bulan ini belum ada. Cuba bulan lain."
+        : "This month's timetable isn't available yet. Try another month.";
+      tr.append(td);
+      el("rows").append(tr);
+    }
+    const url = new URL(location.href);
+    if (month === nowIn(timezone).date.slice(0, 7))
+      url.searchParams.delete("month");
+    else url.searchParams.set("month", month);
+    history.replaceState(null, "", url);
+  }
+
+  el("prev").addEventListener("click", () => {
+    month = shiftMonth(month, -1);
+    loadMonth();
+  });
+  el("next").addEventListener("click", () => {
+    month = shiftMonth(month, 1);
+    loadMonth();
+  });
+  el("print").addEventListener("click", () => window.print());
+  el("copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      el("copied").textContent = ms ? "Disalin." : "Copied.";
+    } catch {
+      el("copied").textContent = ms
+        ? "Salin alamat dari bar alamat."
+        : "Copy the address from the address bar.";
+    }
+    setTimeout(() => (el("copied").textContent = ""), 3000);
+  });
+
+  loadToday().catch(() => {
+    status.textContent = ms
+      ? "Tidak dapat memuatkan waktu solat. Cuba lagi sebentar."
+      : "Couldn't load the prayer times. Please try again shortly.";
+  });
+  loadMonth();
+
+  // Keep the highlight current while the page is open; reload at midnight.
+  setInterval(() => {
+    if (todayDay && nowIn(timezone).date !== todayDay.date)
+      loadToday().catch(() => {});
+    else renderToday();
+  }, 30 * 1000);
+</script>
+
+<style>
+  .crumbs {
+    font-size: 0.85rem;
+    margin: 1rem 0 0.5rem;
+  }
+  .meta {
+    font-size: 0.85rem;
+  }
+  .today {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.25rem 1.25rem;
+    margin-block: 1.5rem;
+  }
+  .today h2 {
+    margin: 0 0 0.25rem;
+    padding: 0;
+    border: 0;
+  }
+  .date {
+    margin: 0 0 0.5rem;
+  }
+  .times {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 22rem;
+    font-size: 1.1rem;
+  }
+  .times :global(th),
+  .times :global(td) {
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    font-weight: 400;
+  }
+  .times :global(td) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .times :global(tr.active) {
+    background: var(--highlight);
+    color: var(--highlight-text);
+  }
+  .times :global(tr.active th),
+  .times :global(tr.active td) {
+    font-weight: 700;
+  }
+  .status:empty {
+    display: none;
+  }
+  .app {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .links {
+    margin-top: 0.25rem;
+  }
+  .nearby ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.25rem 1.5rem;
+    padding-left: 1.2rem;
+  }
+</style>
