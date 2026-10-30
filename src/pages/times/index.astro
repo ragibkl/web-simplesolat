@@ -191,13 +191,22 @@ const pageCountries = await getPageCountries();
   }
 
   async function showZone(countryCode: string, zoneCode: string) {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify([countryCode, zoneCode]));
+    } catch {}
+    // Zones with their own page (Brunei, Malaysia, Singapore, Sri Lanka)
+    // always open there: from the dropdowns, "Use my location" or old links.
+    if (hasZonePages(countryCode)) {
+      setStatus("Opening the timetable…");
+      location.assign(
+        zonePath(countryCode, zoneCode) + (month ? `?month=${month}` : ""),
+      );
+      return;
+    }
     place = { kind: "zone", country: countryCode, zone: zoneCode };
     const zone = (await getZones(countryCode)).find((z) => z.code === zoneCode);
     if (!month && zone) month = nowIn(zone.timezone).date.slice(0, 7);
     await render();
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify([countryCode, zoneCode]));
-    } catch {}
   }
 
   async function locate() {
@@ -279,7 +288,7 @@ const pageCountries = await getPageCountries();
     const cc = params.get("country");
     const zc = params.get("zone");
 
-    // Zones with their own page open there (old links and the home page).
+    // Old links to zones that now have their own page.
     if (cc && zc && hasZonePages(cc)) {
       location.replace(zonePath(cc, zc) + (m ? `?month=${m}` : ""));
       return;
@@ -311,7 +320,20 @@ const pageCountries = await getPageCountries();
     if (saved && countries.some((c) => c.code === saved[0])) {
       countrySel.value = saved[0];
       await fillZones(zoneSel, saved[0], saved[1]);
-      await showZone(saved[0], saved[1]).catch(() => {});
+      if (hasZonePages(saved[0])) {
+        // Don't leave the page on its own: offer the zone chosen last time.
+        const zone = (await getZones(saved[0])).find(
+          (z) => z.code === saved[1],
+        );
+        if (zone) {
+          const link = document.createElement("a");
+          link.href = zonePath(saved[0], saved[1]);
+          link.textContent = `${zone.location} →`;
+          status.replaceChildren("Last time: ", link);
+        }
+      } else {
+        await showZone(saved[0], saved[1]).catch(() => {});
+      }
     }
   }
 

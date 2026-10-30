@@ -137,7 +137,13 @@ const nearby = c.zones
 </Base>
 
 <script>
-  import { type Day, getMonth, nowIn, to12h } from "../../../lib/times";
+  import {
+    type Day,
+    STORE_KEY,
+    getMonth,
+    nowIn,
+    to12h,
+  } from "../../../lib/times";
   import {
     type Lang,
     locale,
@@ -154,6 +160,11 @@ const nearby = c.zones
   const el = <T extends HTMLElement>(id: string) =>
     document.getElementById(id) as T;
   const status = el<HTMLParagraphElement>("status");
+
+  // Remembered for the home page's live times, like choosing it there.
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify([country, zone]));
+  } catch {}
 
   let month = nowIn(timezone).date.slice(0, 7);
   let todayDay: Day | null = null;
