@@ -3,8 +3,8 @@
 // official timetable, calculated for a location). Runs in the browser like
 // the live times on the home page. The address keeps the place and month
 // (?country=MY&zone=SGR01&month=2026-10, or ?lat=..&lng=..), so it can be
-// bookmarked or shared, and it prints as a one-page timetable. Countries
-// with zone pages are also listed below, and their zone links go there.
+// bookmarked or shared, and it prints as a one-page timetable. The countries
+// with a page per zone are listed below.
 import Base from "../../layouts/Base.astro";
 import MonthTable from "../../components/MonthTable.astro";
 import { countryPath, getPageCountries } from "../../lib/zonePages";
@@ -72,7 +72,6 @@ const pageCountries = await getPageCountries();
 <script>
   import { calculateDay } from "../../lib/calculate";
   import { monthName, renderMonthTable, shiftMonth } from "../../lib/month";
-  import { hasZonePages, zonePath } from "../../lib/zonePages";
   import {
     type Country,
     type Day,
@@ -191,22 +190,13 @@ const pageCountries = await getPageCountries();
   }
 
   async function showZone(countryCode: string, zoneCode: string) {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify([countryCode, zoneCode]));
-    } catch {}
-    // Zones with their own page (Brunei, Malaysia, Singapore, Sri Lanka)
-    // always open there: from the dropdowns, "Use my location" or old links.
-    if (hasZonePages(countryCode)) {
-      setStatus("Opening the timetable…");
-      location.assign(
-        zonePath(countryCode, zoneCode) + (month ? `?month=${month}` : ""),
-      );
-      return;
-    }
     place = { kind: "zone", country: countryCode, zone: zoneCode };
     const zone = (await getZones(countryCode)).find((z) => z.code === zoneCode);
     if (!month && zone) month = nowIn(zone.timezone).date.slice(0, 7);
     await render();
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify([countryCode, zoneCode]));
+    } catch {}
   }
 
   async function locate() {
@@ -288,11 +278,6 @@ const pageCountries = await getPageCountries();
     const cc = params.get("country");
     const zc = params.get("zone");
 
-    // Old links to zones that now have their own page.
-    if (cc && zc && hasZonePages(cc)) {
-      location.replace(zonePath(cc, zc) + (m ? `?month=${m}` : ""));
-      return;
-    }
     if (cc && zc && countries.some((c) => c.code === cc)) {
       countrySel.value = cc;
       await fillZones(zoneSel, cc, zc);
@@ -320,20 +305,7 @@ const pageCountries = await getPageCountries();
     if (saved && countries.some((c) => c.code === saved[0])) {
       countrySel.value = saved[0];
       await fillZones(zoneSel, saved[0], saved[1]);
-      if (hasZonePages(saved[0])) {
-        // Don't leave the page on its own: offer the zone chosen last time.
-        const zone = (await getZones(saved[0])).find(
-          (z) => z.code === saved[1],
-        );
-        if (zone) {
-          const link = document.createElement("a");
-          link.href = zonePath(saved[0], saved[1]);
-          link.textContent = `${zone.location} →`;
-          status.replaceChildren("Last time: ", link);
-        }
-      } else {
-        await showZone(saved[0], saved[1]).catch(() => {});
-      }
+      await showZone(saved[0], saved[1]).catch(() => {});
     }
   }
 
