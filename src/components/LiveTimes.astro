@@ -3,6 +3,7 @@
 // Everything happens in the browser: the location is matched against zone
 // boundaries locally, and only the zone's timetable is fetched, exactly as
 // the app does it. Data comes from the public simplesolat-data CDN.
+import TodayCard from "./TodayCard.astro";
 ---
 
 <section class="live" aria-labelledby="times-heading">
@@ -37,11 +38,7 @@
       <br />
       <span id="meta" class="muted"></span>
     </p>
-    <p id="date" class="date"></p>
-    <table class="times">
-      <tbody id="rows"></tbody>
-    </table>
-    <p id="note" class="note muted"></p>
+    <TodayCard level={null} plain />
     <p class="month">
       <a id="month-link" href="/times/">
         See the whole month →
@@ -62,8 +59,6 @@
   import {
     type Country,
     type Day,
-    type Key,
-    ROWS,
     STORE_KEY,
     fillZones,
     findWorldCountry,
@@ -73,8 +68,9 @@
     getPosition,
     getZones,
     nowIn,
-    to12h,
   } from "../lib/times";
+  import { placeText } from "../lib/place";
+  import { renderToday } from "../lib/today";
   import { hasZonePages, zonePath } from "../lib/zonePages";
 
   const el = <T extends HTMLElement>(id: string) =>
@@ -104,41 +100,10 @@
   function render() {
     if (!current) return;
     const { place, meta, timezone, day } = current;
-    const now = nowIn(timezone);
-    // Only the rows this day has: no Dhuha outside Malaysia and Brunei.
-    const rows = ROWS.filter(([key]) => day[key] !== undefined);
-    const time = (key: Key) => day[key] as string;
-
-    // Same rule as the app: a row is current from its time until the next
-    // row's time; Isha runs until midnight.
-    let active = -1;
-    rows.forEach(([key], i) => {
-      const next = rows[i + 1];
-      if (now.time >= time(key) && (!next || now.time < time(next[0])))
-        active = i;
-    });
-
     el("place").textContent = place;
     el("meta").textContent = meta;
-    el("date").textContent = new Date(`${day.date}T00:00:00`).toDateString();
-    el("rows").replaceChildren(
-      ...rows.map(([key, label], i) => {
-        const tr = document.createElement("tr");
-        if (i === active) tr.className = "active";
-        const th = document.createElement("th");
-        th.scope = "row";
-        th.textContent = label;
-        const td = document.createElement("td");
-        td.textContent = to12h(time(key));
-        tr.append(th, td);
-        return tr;
-      }),
-    );
-
-    const fajrActive = active === 1;
-    el("note").textContent = fajrActive
-      ? `Fajr ends at Syuruk, ${to12h(day.syuruk)}.`
-      : `Fajr ends at Syuruk (sunrise).`;
+    // The same Today card as on /times/ and the zone pages.
+    renderToday(day, timezone);
     monthLink.href = current.monthHref;
     result.hidden = false;
   }
@@ -158,8 +123,9 @@
     }
 
     current = {
-      place: `${zone.location}, ${zone.state}`,
-      meta: `${zone.code} · Source: ${country.source}`,
+      // Same wording as /times/ and the zone pages.
+      place: zone.location,
+      meta: placeText(zone, country.name, country.source).meta,
       timezone: zone.timezone,
       day,
       monthHref: hasZonePages(country.code)
@@ -325,35 +291,6 @@
   }
   .place .muted {
     font-size: 0.85rem;
-  }
-  .date {
-    margin: 0 0 0.5rem;
-  }
-  .times {
-    border-collapse: collapse;
-    width: 100%;
-    max-width: 22rem;
-    font-size: 1.1rem;
-  }
-  /* The rows are created by the script, so Astro's scoped styles don't reach
-     them: these rules have to be global. */
-  .times :global(th),
-  .times :global(td) {
-    padding: 0.35rem 0.6rem;
-    text-align: left;
-    font-weight: 400;
-  }
-  .times :global(td) {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-  .times :global(tr.active) {
-    background: var(--highlight);
-    color: var(--highlight-text);
-  }
-  .times :global(tr.active th),
-  .times :global(tr.active td) {
-    font-weight: 700;
   }
   .month {
     margin: 0.75rem 0 0;

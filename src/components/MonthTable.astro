@@ -1,5 +1,6 @@
 ---
-// The month table with its place line, month buttons, Print and Copy link,
+// The month table with its month buttons, Print and Copy link (the place line
+// is for the printout; on screen the place heading says it),
 // shared by /times/ and the zone pages. The page's script fills it in (see
 // src/lib/month.ts); it prints as a one-page timetable.
 import type { Lang } from "../lib/month";
@@ -18,13 +19,15 @@ const ms = lang === "ms";
 
 <div class="month-block">
   <div class="heading-row">
-    <p class="place">
+    <p class="place print-block">
       <strong id="place">{place}</strong>
       <br />
       <span id="meta" class="muted">
         {meta}
       </span>
-      <span class="print-only muted"> · {printUrl}</span>
+      <span class="print-only muted">
+        · <span id="print-url">{printUrl}</span>
+      </span>
     </p>
     <div class="month-nav">
       <button type="button" class="button secondary" id="prev">
@@ -41,6 +44,8 @@ const ms = lang === "ms";
     </div>
   </div>
 
+  <p id="month-empty" class="month-empty" hidden></p>
+
   <div class="table-wrap">
     <table class="month-table">
       <thead>
@@ -52,8 +57,11 @@ const ms = lang === "ms";
 
   <p class="note muted">
     {ms
-      ? "Waktu 12 jam. Subuh tamat pada Syuruk (matahari terbit). Hari ini diserlahkan dan hari Jumaat ditebalkan."
-      : "12-hour times. Fajr ends at Syuruk (sunrise). Today is highlighted and Fridays are in bold."}
+      ? "Waktu 12 jam. Subuh tamat pada Syuruk (matahari terbit). Hari Jumaat ditebalkan."
+      : "12-hour times. Fajr ends at Syuruk (sunrise). Fridays are in bold."}
+    <span class="screen-only">
+      {ms ? "Hari ini diserlahkan." : "Today is highlighted."}
+    </span>
   </p>
   <p class="actions">
     <button type="button" class="button secondary" id="print">
@@ -139,8 +147,12 @@ const ms = lang === "ms";
     align-items: center;
     gap: 0.6rem;
   }
-  .print-only {
+  .print-only,
+  .print-block {
     display: none;
+  }
+  .month-empty {
+    margin: 1rem 0;
   }
   .sr-only {
     position: absolute;
@@ -196,6 +208,16 @@ const ms = lang === "ms";
     }
     .print-only {
       display: inline;
+    }
+    .print-block {
+      display: block;
+    }
+    .screen-only {
+      display: none;
+    }
+    /* The sticky date column broke the printed "today" outline. */
+    .month-table :global(th:first-child) {
+      position: static;
     }
   }
 </style>

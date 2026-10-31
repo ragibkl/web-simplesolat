@@ -16,6 +16,15 @@ const fullTitle = title
   ? `${title} · ${SITE.name}`
   : `${SITE.name}: prayer times`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
+// Which menu item is the current page (or section, for the timetables).
+const path = Astro.url.pathname;
+const section = path.startsWith("/times")
+  ? "times"
+  : path.startsWith("/support")
+    ? "support"
+    : path.startsWith("/privacy")
+      ? "privacy"
+      : null;
 ---
 
 <!doctype html>
@@ -44,11 +53,25 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
         simplesolat
       </a>
       <nav aria-label="Main">
-        <a href="/#times">Prayer times</a>
-        <a href="/times/">Timetables</a>
+        <a
+          href="/times/"
+          aria-current={section === "times" ? "page" : undefined}
+        >
+          Prayer times
+        </a>
         <a href="/#features">Features</a>
-        <a href="/support/">Support</a>
-        <a href="/privacy/">Privacy</a>
+        <a
+          href="/support/"
+          aria-current={section === "support" ? "page" : undefined}
+        >
+          Support
+        </a>
+        <a
+          href="/privacy/"
+          aria-current={section === "privacy" ? "page" : undefined}
+        >
+          Privacy
+        </a>
       </nav>
     </header>
 

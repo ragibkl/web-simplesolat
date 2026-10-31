@@ -106,6 +106,13 @@ img {
   text-decoration: none;
 }
 
+/* Buttons don't inherit the page font by default (they came out in Arial,
+   next to link-buttons and selects in JetBrains Mono). */
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
 .button.secondary {
   background: transparent;
   color: var(--text);
@@ -139,8 +146,13 @@ img {
   text-decoration: none;
 }
 
-.site-header nav a:hover {
+.site-header nav a:hover,
+.site-header nav a[aria-current="page"] {
   color: var(--text);
+}
+
+.site-header nav a[aria-current="page"] {
+  text-decoration: underline;
 }
 
 .site-footer {
@@ -171,4 +183,9 @@ img {
   @page {
     margin: 12mm;
   }
+}
+
+/* Elements hidden by script stay hidden even when a style sets display. */
+[hidden] {
+  display: none !important;
 }
