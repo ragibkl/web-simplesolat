@@ -91,7 +91,7 @@ const pageCountries = await getPageCountries();
 </Base>
 
 <script>
-  import { calculateDay } from "../../lib/calculate";
+  import { calculateDay, loadMethods } from "../../lib/calculate";
   import {
     monthName,
     renderMonthTable,
@@ -249,6 +249,7 @@ const pageCountries = await getPageCountries();
       const { lat, lng } = place;
       setStatus("Calculating prayer times for your location…");
       const country = await findWorldCountry(lat, lng);
+      await loadMethods();
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       currentMonth = nowIn(timezone).date.slice(0, 7);
       showMonthEmpty(false);
