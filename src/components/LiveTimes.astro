@@ -55,7 +55,7 @@ import TodayCard from "./TodayCard.astro";
 </section>
 
 <script>
-  import { calculateDay } from "../lib/calculate";
+  import { calculateDay, loadMethods } from "../lib/calculate";
   import {
     type Country,
     type Day,
@@ -164,6 +164,7 @@ import TodayCard from "./TodayCard.astro";
     setStatus("Calculating prayer times for your location…");
     // Without the country, the default method is used.
     const country = await findWorldCountry(lat, lng);
+    await loadMethods();
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const { label, times } = calculateDay(
       new Date(),
