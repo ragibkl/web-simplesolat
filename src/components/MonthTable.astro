@@ -1,5 +1,6 @@
 ---
-// The month table with its place line, month buttons, Print and Copy link,
+// The month table with its month buttons, Print and Copy link (the place line
+// is for the printout; on screen the place heading says it),
 // shared by /times/ and the zone pages. The page's script fills it in (see
 // src/lib/month.ts); it prints as a one-page timetable.
 import type { Lang } from "../lib/month";
@@ -18,7 +19,7 @@ const ms = lang === "ms";
 
 <div class="month-block">
   <div class="heading-row">
-    <p class="place">
+    <p class="place print-block">
       <strong id="place">{place}</strong>
       <br />
       <span id="meta" class="muted">
@@ -146,7 +147,8 @@ const ms = lang === "ms";
     align-items: center;
     gap: 0.6rem;
   }
-  .print-only {
+  .print-only,
+  .print-block {
     display: none;
   }
   .month-empty {
@@ -206,6 +208,9 @@ const ms = lang === "ms";
     }
     .print-only {
       display: inline;
+    }
+    .print-block {
+      display: block;
     }
     .screen-only {
       display: none;

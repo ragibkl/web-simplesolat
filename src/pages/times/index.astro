@@ -3,25 +3,26 @@
 // official timetable, calculated for a location). Runs in the browser like
 // the live times on the home page. The address keeps the place and month
 // (?country=MY&zone=SGR01&month=2026-10, or ?lat=..&lng=..), so it can be
-// bookmarked or shared, and it prints as a one-page timetable. The countries
-// with a page per zone are listed below.
+// bookmarked or shared, and it prints as a one-page timetable. The chosen
+// place shows in the same place view as the zone pages; countries with a page
+// per zone are listed below.
 import Base from "../../layouts/Base.astro";
-import MonthTable from "../../components/MonthTable.astro";
+import PlaceView from "../../components/PlaceView.astro";
 import { countryPath, getPageCountries } from "../../lib/zonePages";
 
 const pageCountries = await getPageCountries();
 ---
 
 <Base
-  title="Timetables"
+  title="Prayer times"
   description="A whole month of prayer times for your zone, from the official timetables (JAKIM and others). Print it or share the link."
 >
   <section class="month-page" aria-labelledby="month-heading">
     <h1 id="month-heading" class="no-print">
-      Timetables
+      Prayer times
     </h1>
     <p class="lead muted no-print">
-      A whole month of prayer times for any zone, ready to print.
+      Today's times and the whole month for any zone, ready to print.
     </p>
 
     <div class="controls no-print">
@@ -45,8 +46,25 @@ const pageCountries = await getPageCountries();
 
     <p id="status" class="status muted no-print" aria-live="polite"></p>
 
+    <noscript>
+      <p>Prayer times load with JavaScript. Turn it on to use this page.</p>
+    </noscript>
+
     <div id="result" hidden>
-      <MonthTable printUrl="simplesolat.com/times" />
+      <PlaceView level={2} printUrl="simplesolat.com/times">
+        <p slot="links" id="permalink" class="permalink" hidden>
+          <a id="permalink-link" href="/times/">
+            This zone's own page, to share or bookmark →
+          </a>
+        </p>
+        <section slot="others" id="others" class="nearby no-print" hidden>
+          <h3 id="others-heading" class="others-heading"></h3>
+          <ul id="others-list"></ul>
+          <p id="others-all" hidden>
+            <a id="others-all-link" href="/times/"></a>
+          </p>
+        </section>
+      </PlaceView>
     </div>
 
     <p class="privacy muted no-print">
@@ -80,7 +98,9 @@ const pageCountries = await getPageCountries();
     shiftMonth,
     showMonthEmpty,
   } from "../../lib/month";
-  import { hasZonePages, zonePath } from "../../lib/zonePages";
+  import { placeText } from "../../lib/place";
+  import { renderToday, setTodayStatus } from "../../lib/today";
+  import { countryPath, hasZonePages, zonePath } from "../../lib/zonePages";
   import {
     type Country,
     type Day,
@@ -93,6 +113,7 @@ const pageCountries = await getPageCountries();
     getPosition,
     getZones,
     nowIn,
+    type Zone,
   } from "../../lib/times";
 
   const el = <T extends HTMLElement>(id: string) =>
@@ -134,6 +155,55 @@ const pageCountries = await getPageCountries();
   const renderTable = (days: Day[], today: string) =>
     renderMonthTable(el("head"), el("rows"), days, today);
 
+  // The place heading, meta line, link to the zone's own page and other zones
+  // (same as on a zone page).
+  function showZoneHeader(country: Country, zone: Zone, zones: Zone[]) {
+    const text = placeText(zone, country.name, country.source);
+    el("place-heading").textContent = text.heading;
+    el("place-areas").textContent = text.areas;
+    el("place-areas").hidden = !text.areas;
+    el("place-meta").textContent = text.meta;
+    el("place").textContent = text.printPlace;
+    el("meta").textContent = `${zone.code} · Source: ${country.source}`;
+
+    const hasPage = hasZonePages(country.code);
+    const linkTo = (z: Zone) =>
+      hasPage
+        ? zonePath(country.code, z.code)
+        : `/times/?country=${country.code}&zone=${z.code}`;
+    el("permalink").hidden = !hasPage;
+    el<HTMLAnchorElement>("permalink-link").href = linkTo(zone);
+    // Printed with the zone's own page where there is one.
+    el("print-url").textContent = hasPage
+      ? `simplesolat.com${zonePath(country.code, zone.code)}`
+      : "simplesolat.com/times";
+
+    const others = zones.filter((z) => z.code !== zone.code);
+    const small = zones.length <= 14;
+    const nearby = small
+      ? others
+      : others.filter((z) => z.state === zone.state);
+    el("others-heading").textContent =
+      `Other zones in ${small ? country.name : zone.state}`;
+    el("others-heading").hidden = nearby.length === 0;
+    el("others-list").replaceChildren(
+      ...nearby.map((z) => {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = linkTo(z);
+        a.textContent = z.location;
+        li.append(a);
+        return li;
+      }),
+    );
+    const showAll = hasPage && others.length > nearby.length;
+    el("others-all").hidden = !showAll;
+    const all = el<HTMLAnchorElement>("others-all-link");
+    all.href = countryPath(country.code);
+    all.textContent = `All ${zones.length} zones in ${country.name} →`;
+    el("others").hidden = nearby.length === 0 && !showAll;
+  }
+
   async function render() {
     if (!place) return;
     const [y, m] = month.split("-").map(Number);
@@ -142,33 +212,38 @@ const pageCountries = await getPageCountries();
     if (place.kind === "zone") {
       const { country: cc, zone: zc } = place;
       const country = countries.find((c) => c.code === cc);
-      const zone = (await getZones(cc)).find((z) => z.code === zc);
+      const zones = await getZones(cc);
+      const zone = zones.find((z) => z.code === zc);
       if (!country || !zone) {
         setStatus("That zone wasn't found. Choose one below.");
         return;
       }
-      el("place").textContent = `${zone.location}, ${zone.state}`;
-      el("meta").textContent = `${zone.code} · Source: ${country.source}`;
+      showZoneHeader(country, zone, zones);
       setStatus(`Loading prayer times for ${zone.location}…`);
-      let days: Day[];
-      currentMonth = nowIn(zone.timezone).date.slice(0, 7);
-      // Printed with the zone's own page where there is one.
-      el("print-url").textContent = hasZonePages(cc)
-        ? `simplesolat.com${zonePath(cc, zc)}`
-        : "simplesolat.com/times";
+      const today = nowIn(zone.timezone).date;
+      currentMonth = today.slice(0, 7);
+      result.hidden = false;
+
+      // Today, from this month (whatever month the table shows).
+      getMonth(cc, zc, currentMonth)
+        .then((days) => {
+          const day = days.find((d) => d.date === today);
+          if (day) renderToday(day, zone.timezone);
+          else setTodayStatus("Today's timetable isn't published yet.");
+        })
+        .catch(() =>
+          setTodayStatus("Couldn't load the prayer times. Please try again."),
+        );
+
       try {
-        days = await getMonth(cc, zc, month);
+        const days = await getMonth(cc, zc, month);
+        showMonthEmpty(false);
+        renderTable(days, today);
       } catch {
         // Keep the place and the month buttons, so another month is a tap
         // away.
         showMonthEmpty(true);
-        result.hidden = false;
-        setStatus("");
-        updateUrl();
-        return;
       }
-      showMonthEmpty(false);
-      renderTable(days, nowIn(zone.timezone).date);
       document.title = `${zone.location}, ${el("month-name").textContent} · simplesolat`;
     } else {
       const { lat, lng } = place;
@@ -176,7 +251,6 @@ const pageCountries = await getPageCountries();
       const country = await findWorldCountry(lat, lng);
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       currentMonth = nowIn(timezone).date.slice(0, 7);
-      el("print-url").textContent = "simplesolat.com/times";
       showMonthEmpty(false);
       const count = new Date(y, m, 0).getDate();
       let label = "";
@@ -195,14 +269,30 @@ const pageCountries = await getPageCountries();
           ...r.times,
         });
       }
-      el("place").textContent = country
-        ? `Near ${lat.toFixed(2)}, ${lng.toFixed(2)}, ${country.NAME}`
-        : `Near ${lat.toFixed(2)}, ${lng.toFixed(2)}`;
-      el("meta").textContent =
+      const near = country
+        ? `near ${lat.toFixed(2)}, ${lng.toFixed(2)}, ${country.NAME}`
+        : `near ${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+      el("place-heading").textContent = `Prayer times ${near}`;
+      el("place-areas").hidden = true;
+      el("place-meta").textContent =
         `Calculated (${label}). No official timetable here.`;
+      el("place").textContent = `Near ${near.slice(5)}`;
+      el("meta").textContent = el("place-meta").textContent;
+      el("print-url").textContent = "simplesolat.com/times";
+      el("permalink").hidden = true;
+      el("others").hidden = true;
+
+      const today = calculateDay(
+        new Date(),
+        lat,
+        lng,
+        country?.ISO_A2 ?? null,
+        timezone,
+      );
+      renderToday({ date: nowIn(timezone).date, ...today.times }, timezone);
       renderTable(days, nowIn(timezone).date);
+      result.hidden = false;
     }
-    result.hidden = false;
     setStatus("");
     updateUrl();
   }
@@ -363,6 +453,22 @@ const pageCountries = await getPageCountries();
   }
   .privacy {
     font-size: 0.85rem;
+  }
+  .permalink {
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+  }
+  .others-heading {
+    font-size: 1.35rem;
+    margin-block: 2rem 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .nearby ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.25rem 1.5rem;
+    padding-left: 1.2rem;
   }
   .countries {
     padding-left: 1.2rem;

@@ -1,10 +1,10 @@
 ---
-// One zone's prayer times: today at the top, then the whole month (printable).
-// The page itself is built once per zone; the times load from the CDN in the
-// browser, so new months and years need no rebuild.
+// One zone's prayer times, in the shared place view (today, then the whole
+// month, printable). The page is built once per zone; the times load from the
+// CDN in the browser, so new months and years need no rebuild.
 import Base from "../../../layouts/Base.astro";
-import MonthTable from "../../../components/MonthTable.astro";
-import { SITE } from "../../../lib/site";
+import PlaceView from "../../../components/PlaceView.astro";
+import { placeText } from "../../../lib/place";
 import {
   countryPath,
   getPageCountries,
@@ -24,157 +24,87 @@ export async function getStaticPaths() {
 }
 
 const { c, zone } = Astro.props as { c: CountryWithZones; zone: Zone };
-const ms = c.lang === "ms";
 const source = c.country.source;
-// Brunei's zone names already say "Daerah ..."; Malaysia's list the areas.
-const place = zone.location;
-const where =
-  zone.state && zone.state !== zone.location ? `${zone.state}, ` : "";
+const text = placeText(zone, c.name, source);
 
-// The page title keeps every area (for searches). On the page, a long area
-// list (Malaysian zones) gets a short heading with the areas below it, so
-// today's times stay near the top on a phone.
-const title = ms ? `Waktu Solat ${place}` : `Prayer times in ${place}`;
-const long = place.length > 32;
-const short = long ? `${zone.state} (${zone.code})` : place;
-const heading = ms ? `Waktu Solat ${short}` : `Prayer times in ${short}`;
-const description = ms
-  ? `Waktu solat hari ini dan jadual bulanan untuk ${place}, ${where}${c.name} (${zone.code}), dari ${source}. Boleh dicetak. Prayer times today and this month.`
-  : `Today's prayer times and the monthly timetable for ${place}, ${where}${c.name}, from ${source}. Ready to print.`;
+// The tab title keeps every area (for searches).
+const title = `Prayer times in ${zone.location}`;
+const description = `Today's prayer times and the monthly timetable for ${zone.location}, ${c.name} (${zone.code}), from ${source}. Ready to print.`;
 
 // Small countries list every other zone; bigger ones only the zones in the
 // same state (none for e.g. Kuala Lumpur), plus a link to them all.
 const others = c.zones.filter((z) => z.code !== zone.code);
-const nearby =
-  c.zones.length <= 14 ? others : others.filter((z) => z.state === zone.state);
-const nearbyHeading =
-  c.zones.length <= 14
-    ? ms
-      ? `Zon lain di ${c.name}`
-      : `Other zones in ${c.name}`
-    : ms
-      ? `Zon lain di ${zone.state}`
-      : `Other zones in ${zone.state}`;
+const small = c.zones.length <= 14;
+const nearby = small ? others : others.filter((z) => z.state === zone.state);
+const nearbyHeading = `Other zones in ${small ? c.name : zone.state}`;
 ---
 
-<Base title={title} description={description} lang={c.lang}>
+<Base title={title} description={description}>
   <div
     id="zone-page"
     data-country={c.code}
     data-zone={zone.code}
     data-timezone={zone.timezone}
-    data-lang={c.lang}
   >
-    <nav
-      class="crumbs muted no-print"
-      aria-label={ms ? "Laluan" : "Breadcrumb"}
-    >
-      <a href="/times/">{ms ? "Jadual waktu solat" : "Timetables"}</a>
+    <nav class="crumbs muted no-print" aria-label="Breadcrumb">
+      <a href="/times/">Prayer times</a>
       {" › "}
       <a href={countryPath(c.code)}>{c.name}</a>
       {" › "}
-      {short}
+      {text.short}
     </nav>
 
-    <h1 class="no-print">{heading}</h1>
-    {long && <p class="areas no-print">{place}</p>}
-    <p class="muted meta no-print">
-      {where}
-      {c.name} · {zone.code} · {ms ? "Sumber" : "Source"}: {source}
-      {ms && <span lang="en"> · Prayer times for {place}</span>}
-    </p>
+    <PlaceView
+      level={1}
+      heading={text.heading}
+      areas={text.areas}
+      meta={text.meta}
+      printUrl={`simplesolat.com${zonePath(c.code, zone.code)}`}
+      printPlace={text.printPlace}
+      printMeta={`${zone.code} · Source: ${source}`}
+      loading="Loading prayer times…"
+    >
+      <section slot="others" class="nearby no-print">
+        {nearby.length > 0 && <h2 class="others-heading">{nearbyHeading}</h2>}
+        {nearby.length > 0 && (
+          <ul>
+            {nearby.map((z) => (
+              <li>
+                <a href={zonePath(c.code, z.code)}>{z.location}</a>
+              </li>
+            ))}
+          </ul>
+        )}
+        {others.length > nearby.length && (
+          <p>
+            <a href={countryPath(c.code)}>
+              All {c.zones.length} zones in {c.name} →
+            </a>
+          </p>
+        )}
+      </section>
+    </PlaceView>
 
-    <section class="today no-print" aria-labelledby="today-heading">
-      <h2 id="today-heading">{ms ? "Hari ini" : "Today"}</h2>
-      <p id="today-date" class="date"></p>
-      <table class="times">
-        <tbody id="today-rows"></tbody>
-      </table>
-      <p id="status" class="status muted" aria-live="polite">
-        {ms ? "Memuatkan waktu solat…" : "Loading prayer times…"}
-      </p>
-      <noscript>
-        <p>
-          {ms
-            ? `Waktu solat dimuatkan dengan JavaScript. Hidupkan JavaScript, atau rujuk ${source}.`
-            : `The times load with JavaScript. Turn it on, or see ${source}.`}
-        </p>
-      </noscript>
-    </section>
-
-    <section class="month" aria-labelledby="month-heading">
-      <h2 id="month-heading" class="no-print">
-        {ms ? "Jadual bulanan" : "Monthly timetable"}
-      </h2>
-      <MonthTable
-        lang={c.lang}
-        printUrl={`simplesolat.com${zonePath(c.code, zone.code)}`}
-        place={`${place}${where ? `, ${zone.state}` : ""}`}
-        meta={`${zone.code} · ${ms ? "Sumber" : "Source"}: ${source}`}
-      />
-    </section>
-
-    <section class="app no-print">
-      <p>
-        {ms
-          ? "Nak waktu solat terus di skrin utama telefon? simplesolat: widget yang sentiasa terkini dan peringatan waktu solat. Percuma, tiada iklan."
-          : "Want these times on your phone's home screen? simplesolat has widgets that keep themselves up to date, and reminders. Free, no ads."}
-      </p>
-      <p class="links">
-        <a href={SITE.playStore}>Google Play</a> ·
-        <a href={SITE.appStore}>App Store</a>
-      </p>
-    </section>
-
-    <section class="nearby no-print">
-      {nearby.length > 0 && <h2>{nearbyHeading}</h2>}
-      {nearby.length > 0 && (
-        <ul>
-          {nearby.map((z) => (
-            <li>
-              <a href={zonePath(c.code, z.code)}>{z.location}</a>
-            </li>
-          ))}
-        </ul>
-      )}
-      {others.length > nearby.length && (
-        <p>
-          <a href={countryPath(c.code)}>
-            {ms
-              ? `Semua ${c.zones.length} zon di ${c.name} →`
-              : `All ${c.zones.length} zones in ${c.name} →`}
-          </a>
-        </p>
-      )}
-    </section>
+    <noscript>
+      <p>The times load with JavaScript. Turn it on, or see {source}.</p>
+    </noscript>
   </div>
 </Base>
 
 <script>
+  import { type Day, STORE_KEY, getMonth, nowIn } from "../../../lib/times";
   import {
-    type Day,
-    STORE_KEY,
-    getMonth,
-    nowIn,
-    to12h,
-  } from "../../../lib/times";
-  import {
-    type Lang,
-    locale,
     monthName,
     renderMonthTable,
-    rowsFor,
     shiftMonth,
     showMonthEmpty,
   } from "../../../lib/month";
+  import { renderToday, setTodayStatus } from "../../../lib/today";
 
   const root = document.getElementById("zone-page") as HTMLElement;
   const { country, zone, timezone } = root.dataset as Record<string, string>;
-  const lang = root.dataset.lang as Lang;
-  const ms = lang === "ms";
   const el = <T extends HTMLElement>(id: string) =>
     document.getElementById(id) as T;
-  const status = el<HTMLParagraphElement>("status");
 
   // Remembered for the home page's live times, like choosing it there.
   try {
@@ -184,74 +114,28 @@ const nearbyHeading =
   let month = nowIn(timezone).date.slice(0, 7);
   let todayDay: Day | null = null;
 
-  const params = new URLSearchParams(location.search);
-  const asked = params.get("month");
+  const asked = new URLSearchParams(location.search).get("month");
   if (asked && /^\d{4}-\d{2}$/.test(asked)) month = asked;
-
-  // Today's times, with the current one highlighted (same rule as the app:
-  // a time is current until the next one; Isha runs until midnight).
-  function renderToday() {
-    if (!todayDay) return;
-    const day = todayDay;
-    const now = nowIn(timezone);
-    const rows = rowsFor(lang).filter(([key]) => day[key] !== undefined);
-    let active = -1;
-    rows.forEach(([key], i) => {
-      const next = rows[i + 1];
-      if (now.time >= day[key]! && (!next || now.time < day[next[0]]!))
-        active = i;
-    });
-    el("today-date").textContent = new Date(
-      `${day.date}T00:00:00`,
-    ).toLocaleDateString(locale(lang), {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-    el("today-rows").replaceChildren(
-      ...rows.map(([key, label], i) => {
-        const tr = document.createElement("tr");
-        if (i === active) tr.className = "active";
-        const th = document.createElement("th");
-        th.scope = "row";
-        th.textContent = label;
-        const td = document.createElement("td");
-        td.textContent = to12h(day[key]!);
-        tr.append(th, td);
-        return tr;
-      }),
-    );
-  }
 
   async function loadToday() {
     const today = nowIn(timezone).date;
     const days = await getMonth(country, zone, today.slice(0, 7));
     todayDay = days.find((d) => d.date === today) ?? null;
     if (!todayDay) {
-      status.textContent = ms
-        ? "Jadual hari ini belum ada untuk zon ini."
-        : "Today's timetable isn't available for this zone yet.";
+      setTodayStatus("Today's timetable isn't published yet.");
       return;
     }
-    status.textContent = "";
-    renderToday();
+    renderToday(todayDay, timezone);
   }
 
   async function loadMonth() {
-    el("month-name").textContent = monthName(month, lang);
+    el("month-name").textContent = monthName(month);
     try {
       const days = await getMonth(country, zone, month);
-      showMonthEmpty(false, lang);
-      renderMonthTable(
-        el("head"),
-        el("rows"),
-        days,
-        nowIn(timezone).date,
-        lang,
-      );
+      showMonthEmpty(false);
+      renderMonthTable(el("head"), el("rows"), days, nowIn(timezone).date);
     } catch {
-      showMonthEmpty(true, lang);
+      showMonthEmpty(true);
     }
     const url = new URL(location.href);
     if (month === nowIn(timezone).date.slice(0, 7))
@@ -272,95 +156,33 @@ const nearbyHeading =
   el("copy").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);
-      el("copied").textContent = ms ? "Disalin." : "Copied.";
+      el("copied").textContent = "Copied.";
     } catch {
-      el("copied").textContent = ms
-        ? "Salin alamat dari bar alamat."
-        : "Copy the address from the address bar.";
+      el("copied").textContent = "Copy the address from the address bar.";
     }
     setTimeout(() => (el("copied").textContent = ""), 3000);
   });
 
-  loadToday().catch(() => {
-    status.textContent = ms
-      ? "Tidak dapat memuatkan waktu solat. Cuba lagi sebentar."
-      : "Couldn't load the prayer times. Please try again shortly.";
-  });
+  loadToday().catch(() =>
+    setTodayStatus("Couldn't load the prayer times. Please try again."),
+  );
   loadMonth();
 
   // Keep the highlight current while the page is open; reload at midnight.
   setInterval(() => {
     if (todayDay && nowIn(timezone).date !== todayDay.date)
       loadToday().catch(() => {});
-    else renderToday();
+    else if (todayDay) renderToday(todayDay, timezone);
   }, 30 * 1000);
 </script>
 
 <style>
-  .areas {
-    margin: 0.4rem 0 0;
-  }
-  @media (max-width: 30rem) {
-    h1 {
-      font-size: 1.5rem;
-    }
-  }
   .crumbs {
     font-size: 0.85rem;
     margin: 1rem 0 0.5rem;
   }
-  .meta {
-    font-size: 0.85rem;
-  }
-  .today {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 1rem 1.25rem 1.25rem;
-    margin-block: 1.5rem;
-  }
-  .today h2 {
-    margin: 0 0 0.25rem;
-    padding: 0;
-    border: 0;
-  }
-  .date {
-    margin: 0 0 0.5rem;
-  }
-  .times {
-    border-collapse: collapse;
-    width: 100%;
-    max-width: 22rem;
-    font-size: 1.1rem;
-  }
-  .times :global(th),
-  .times :global(td) {
-    padding: 0.35rem 0.6rem;
-    text-align: left;
-    font-weight: 400;
-  }
-  .times :global(td) {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-  .times :global(tr.active) {
-    background: var(--highlight);
-    color: var(--highlight-text);
-  }
-  .times :global(tr.active th),
-  .times :global(tr.active td) {
-    font-weight: 700;
-  }
-  .status:empty {
-    display: none;
-  }
-  .app {
-    margin-top: 2rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-  }
-  .links {
-    margin-top: 0.25rem;
+  .others-heading {
+    font-size: 1.35rem;
   }
   .nearby ul {
     display: grid;

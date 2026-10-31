@@ -1,0 +1,108 @@
+---
+// One place's prayer times, in the same order wherever it appears: heading,
+// Today, the monthly timetable, the app line, then other zones. Used by the
+// zone pages (filled at build time) and /times/ (filled by its script).
+import MonthTable from "./MonthTable.astro";
+import TodayCard from "./TodayCard.astro";
+import { SITE } from "../lib/site";
+
+interface Props {
+  // 1 on a zone page (the place is the page); 2 on /times/ (under its heading).
+  level: 1 | 2;
+  heading?: string;
+  areas?: string;
+  meta?: string;
+  printUrl: string;
+  printPlace?: string;
+  printMeta?: string;
+  loading?: string;
+}
+
+const {
+  level,
+  heading = "",
+  areas = "",
+  meta = "",
+  printUrl,
+  printPlace = "",
+  printMeta = "",
+  loading = "",
+} = Astro.props;
+const H = level === 1 ? "h1" : "h2";
+const sub = level === 1 ? 2 : 3;
+const SubH = sub === 2 ? "h2" : "h3";
+---
+
+<div class="place-view">
+  <div class="place-header no-print">
+    <H id="place-heading" class="place-heading">
+      {heading}
+    </H>
+    <p id="place-areas" class="areas" hidden={!areas}>
+      {areas}
+    </p>
+    <p id="place-meta" class="muted meta">
+      {meta}
+    </p>
+    <slot name="links" />
+  </div>
+
+  <TodayCard level={sub} loading={loading} />
+
+  <section class="month">
+    <SubH class="section-heading no-print">Monthly timetable</SubH>
+    <MonthTable printUrl={printUrl} place={printPlace} meta={printMeta} />
+  </section>
+
+  <section class="app no-print">
+    <p>
+      Want these times on your phone's home screen? simplesolat has widgets that
+      keep themselves up to date, and reminders. Free, no ads.
+    </p>
+    <p class="links">
+      <a href={SITE.playStore}>Google Play</a> ·
+      <a href={SITE.appStore}>App Store</a>
+    </p>
+  </section>
+
+  <slot name="others" />
+</div>
+
+<style>
+  .place-heading {
+    margin: 0;
+  }
+  /* On /times/ the place sits under the page heading: same look, no rule. */
+  h2.place-heading {
+    font-size: 1.6rem;
+    border: 0;
+    padding: 0;
+    margin-top: 1.5rem;
+  }
+  .areas {
+    margin: 0.4rem 0 0;
+  }
+  .meta {
+    font-size: 0.85rem;
+    margin: 0.4rem 0 0;
+  }
+  .section-heading {
+    font-size: 1.35rem;
+    margin-block: 2rem 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .app {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .links {
+    margin-top: 0.25rem;
+  }
+  @media (max-width: 30rem) {
+    .place-heading {
+      font-size: 1.5rem !important;
+    }
+  }
+</style>

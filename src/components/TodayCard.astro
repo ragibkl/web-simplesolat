@@ -1,0 +1,88 @@
+---
+// Today's times: the same card on the home page, /times/ and the zone pages.
+// The page's script fills it in with renderToday() (src/lib/today.ts).
+interface Props {
+  // Heading level of "Today" (the page decides); none when the page already
+  // has a heading for it (home: "Prayer times today").
+  level?: 2 | 3 | null;
+  // Shown until the times load.
+  loading?: string;
+  // Inside another card (the home widget): no border of its own.
+  plain?: boolean;
+}
+
+const { level = 2, loading = "", plain = false } = Astro.props;
+const H = level === 3 ? "h3" : "h2";
+---
+
+<section class:list={["today-card", "no-print", { plain }]}>
+  {level && <H class="today-heading">Today</H>}
+  <p id="today-status" class="status muted" aria-live="polite">
+    {loading}
+  </p>
+  <div id="today-body" hidden>
+    <p id="today-date" class="date"></p>
+    <table class="times">
+      <tbody id="today-rows"></tbody>
+    </table>
+    <p id="today-note" class="note muted"></p>
+  </div>
+  <slot />
+</section>
+
+<style>
+  .today-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.25rem 1.25rem;
+    margin-block: 1.5rem;
+  }
+  .today-card.plain {
+    background: none;
+    border: 0;
+    padding: 0;
+    margin-block: 0;
+  }
+  .today-heading {
+    margin: 0 0 0.25rem;
+    padding: 0;
+    border: 0;
+    font-size: 1.35rem;
+  }
+  .status:empty {
+    display: none;
+  }
+  .date {
+    margin: 0 0 0.5rem;
+  }
+  .times {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 22rem;
+    font-size: 1.1rem;
+  }
+  /* Rows are created by the script, so these rules have to be global. */
+  .times :global(th),
+  .times :global(td) {
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    font-weight: 400;
+  }
+  .times :global(td) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .times :global(tr.active) {
+    background: var(--highlight);
+    color: var(--highlight-text);
+  }
+  .times :global(tr.active th),
+  .times :global(tr.active td) {
+    font-weight: 700;
+  }
+  .note {
+    font-size: 0.85rem;
+    margin-bottom: 0;
+  }
+</style>
