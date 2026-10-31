@@ -13,13 +13,16 @@ const pageCountries = await getPageCountries();
 ---
 
 <Base
-  title="Monthly prayer times"
+  title="Timetables"
   description="A whole month of prayer times for your zone, from the official timetables (JAKIM and others). Print it or share the link."
 >
   <section class="month-page" aria-labelledby="month-heading">
     <h1 id="month-heading" class="no-print">
-      Monthly prayer times
+      Timetables
     </h1>
+    <p class="lead muted no-print">
+      A whole month of prayer times for any zone, ready to print.
+    </p>
 
     <div class="controls no-print">
       <button type="button" class="button" id="locate">
@@ -71,7 +74,13 @@ const pageCountries = await getPageCountries();
 
 <script>
   import { calculateDay } from "../../lib/calculate";
-  import { monthName, renderMonthTable, shiftMonth } from "../../lib/month";
+  import {
+    monthName,
+    renderMonthTable,
+    shiftMonth,
+    showMonthEmpty,
+  } from "../../lib/month";
+  import { hasZonePages, zonePath } from "../../lib/zonePages";
   import {
     type Country,
     type Day,
@@ -101,6 +110,9 @@ const pageCountries = await getPageCountries();
     | { kind: "point"; lat: number; lng: number };
   let place: Place | null = null;
   let month = ""; // "YYYY-MM"
+  // The current month where the place is: left out of shared links, so a
+  // link always opens on that day's month.
+  let currentMonth = "";
 
   const setStatus = (text: string) => (status.textContent = text);
 
@@ -115,7 +127,7 @@ const pageCountries = await getPageCountries();
       params.set("lat", place.lat.toFixed(2));
       params.set("lng", place.lng.toFixed(2));
     }
-    params.set("month", month);
+    if (month !== currentMonth) params.set("month", month);
     history.replaceState(null, "", `?${params}`);
   }
 
@@ -139,20 +151,23 @@ const pageCountries = await getPageCountries();
       el("meta").textContent = `${zone.code} · Source: ${country.source}`;
       setStatus(`Loading prayer times for ${zone.location}…`);
       let days: Day[];
+      currentMonth = nowIn(zone.timezone).date.slice(0, 7);
+      // Printed with the zone's own page where there is one.
+      el("print-url").textContent = hasZonePages(cc)
+        ? `simplesolat.com${zonePath(cc, zc)}`
+        : "simplesolat.com/times";
       try {
         days = await getMonth(cc, zc, month);
       } catch {
         // Keep the place and the month buttons, so another month is a tap
         // away.
-        el("rows").replaceChildren();
-        el("head").replaceChildren();
+        showMonthEmpty(true);
         result.hidden = false;
-        setStatus(
-          "This month's timetable isn't available for this zone yet. Try another month.",
-        );
+        setStatus("");
         updateUrl();
         return;
       }
+      showMonthEmpty(false);
       renderTable(days, nowIn(zone.timezone).date);
       document.title = `${zone.location}, ${el("month-name").textContent} · simplesolat`;
     } else {
@@ -160,6 +175,9 @@ const pageCountries = await getPageCountries();
       setStatus("Calculating prayer times for your location…");
       const country = await findWorldCountry(lat, lng);
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      currentMonth = nowIn(timezone).date.slice(0, 7);
+      el("print-url").textContent = "simplesolat.com/times";
+      showMonthEmpty(false);
       const count = new Date(y, m, 0).getDate();
       let label = "";
       const days: Day[] = [];

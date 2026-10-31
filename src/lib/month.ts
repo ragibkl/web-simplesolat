@@ -82,3 +82,23 @@ export function renderMonthTable(
     }),
   );
 }
+
+// No timetable for the month on screen (not published yet): one message in
+// place of the table, its note and Print/Copy link, on every timetable page.
+export function showMonthEmpty(empty: boolean, lang: Lang = "en") {
+  const msg = document.getElementById("month-empty")!;
+  msg.hidden = !empty;
+  msg.textContent = empty
+    ? lang === "ms"
+      ? "Jadual bulan ini belum diterbitkan. Cuba bulan lain."
+      : "This month's timetable isn't published yet. Try another month."
+    : "";
+  for (const sel of [
+    ".table-wrap",
+    ".month-block .note",
+    ".month-block .actions",
+  ]) {
+    const node = document.querySelector<HTMLElement>(sel);
+    if (node) node.hidden = empty;
+  }
+}

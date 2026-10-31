@@ -31,17 +31,30 @@ const place = zone.location;
 const where =
   zone.state && zone.state !== zone.location ? `${zone.state}, ` : "";
 
+// The page title keeps every area (for searches). On the page, a long area
+// list (Malaysian zones) gets a short heading with the areas below it, so
+// today's times stay near the top on a phone.
 const title = ms ? `Waktu Solat ${place}` : `Prayer times in ${place}`;
+const long = place.length > 32;
+const short = long ? `${zone.state} (${zone.code})` : place;
+const heading = ms ? `Waktu Solat ${short}` : `Prayer times in ${short}`;
 const description = ms
   ? `Waktu solat hari ini dan jadual bulanan untuk ${place}, ${where}${c.name} (${zone.code}), dari ${source}. Boleh dicetak. Prayer times today and this month.`
   : `Today's prayer times and the monthly timetable for ${place}, ${where}${c.name}, from ${source}. Ready to print.`;
 
-const nearby = c.zones
-  .filter((z) => z.code !== zone.code)
-  .sort(
-    (a, b) => Number(b.state === zone.state) - Number(a.state === zone.state),
-  )
-  .slice(0, 12);
+// Small countries list every other zone; bigger ones only the zones in the
+// same state (none for e.g. Kuala Lumpur), plus a link to them all.
+const others = c.zones.filter((z) => z.code !== zone.code);
+const nearby =
+  c.zones.length <= 14 ? others : others.filter((z) => z.state === zone.state);
+const nearbyHeading =
+  c.zones.length <= 14
+    ? ms
+      ? `Zon lain di ${c.name}`
+      : `Other zones in ${c.name}`
+    : ms
+      ? `Zon lain di ${zone.state}`
+      : `Other zones in ${zone.state}`;
 ---
 
 <Base title={title} description={description} lang={c.lang}>
@@ -60,10 +73,11 @@ const nearby = c.zones
       {" › "}
       <a href={countryPath(c.code)}>{c.name}</a>
       {" › "}
-      {place}
+      {short}
     </nav>
 
-    <h1 class="no-print">{title}</h1>
+    <h1 class="no-print">{heading}</h1>
+    {long && <p class="areas no-print">{place}</p>}
     <p class="muted meta no-print">
       {where}
       {c.name} · {zone.code} · {ms ? "Sumber" : "Source"}: {source}
@@ -112,9 +126,9 @@ const nearby = c.zones
       </p>
     </section>
 
-    {nearby.length > 0 && (
-      <section class="nearby no-print">
-        <h2>{ms ? `Zon lain di ${c.name}` : `Other zones in ${c.name}`}</h2>
+    <section class="nearby no-print">
+      {nearby.length > 0 && <h2>{nearbyHeading}</h2>}
+      {nearby.length > 0 && (
         <ul>
           {nearby.map((z) => (
             <li>
@@ -122,17 +136,17 @@ const nearby = c.zones
             </li>
           ))}
         </ul>
-        {c.zones.length - 1 > nearby.length && (
-          <p>
-            <a href={countryPath(c.code)}>
-              {ms
-                ? `Semua ${c.zones.length} zon di ${c.name} →`
-                : `All ${c.zones.length} zones in ${c.name} →`}
-            </a>
-          </p>
-        )}
-      </section>
-    )}
+      )}
+      {others.length > nearby.length && (
+        <p>
+          <a href={countryPath(c.code)}>
+            {ms
+              ? `Semua ${c.zones.length} zon di ${c.name} →`
+              : `All ${c.zones.length} zones in ${c.name} →`}
+          </a>
+        </p>
+      )}
+    </section>
   </div>
 </Base>
 
@@ -151,6 +165,7 @@ const nearby = c.zones
     renderMonthTable,
     rowsFor,
     shiftMonth,
+    showMonthEmpty,
   } from "../../../lib/month";
 
   const root = document.getElementById("zone-page") as HTMLElement;
@@ -227,6 +242,7 @@ const nearby = c.zones
     el("month-name").textContent = monthName(month, lang);
     try {
       const days = await getMonth(country, zone, month);
+      showMonthEmpty(false, lang);
       renderMonthTable(
         el("head"),
         el("rows"),
@@ -235,15 +251,7 @@ const nearby = c.zones
         lang,
       );
     } catch {
-      el("head").replaceChildren();
-      el("rows").replaceChildren();
-      const tr = document.createElement("tr");
-      const td = document.createElement("td");
-      td.textContent = ms
-        ? "Jadual bulan ini belum ada. Cuba bulan lain."
-        : "This month's timetable isn't available yet. Try another month.";
-      tr.append(td);
-      el("rows").append(tr);
+      showMonthEmpty(true, lang);
     }
     const url = new URL(location.href);
     if (month === nowIn(timezone).date.slice(0, 7))
@@ -289,6 +297,14 @@ const nearby = c.zones
 </script>
 
 <style>
+  .areas {
+    margin: 0.4rem 0 0;
+  }
+  @media (max-width: 30rem) {
+    h1 {
+      font-size: 1.5rem;
+    }
+  }
   .crumbs {
     font-size: 0.85rem;
     margin: 1rem 0 0.5rem;

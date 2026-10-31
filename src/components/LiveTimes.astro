@@ -120,7 +120,15 @@
 
     el("place").textContent = place;
     el("meta").textContent = meta;
-    el("date").textContent = new Date(`${day.date}T00:00:00`).toDateString();
+    // Same format as the zone pages.
+    el("date").textContent = new Date(
+      `${day.date}T00:00:00`,
+    ).toLocaleDateString("en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
     el("rows").replaceChildren(
       ...rows.map(([key, label], i) => {
         const tr = document.createElement("tr");
