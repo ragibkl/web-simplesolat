@@ -68,4 +68,28 @@ export const SOURCES = [
     url: "https://vaktija.ba",
   },
   { country: "Albania", code: "AL", authority: "KMSH", url: "https://kmsh.al" },
+  {
+    country: "Serbia (Sandžak)",
+    code: "RS",
+    authority: "IZ BiH (Vaktija)",
+    url: "https://vaktija.ba",
+  },
+  {
+    country: "Montenegro (Sandžak)",
+    code: "ME",
+    authority: "IZ BiH (Vaktija)",
+    url: "https://vaktija.ba",
+  },
+  {
+    country: "Saudi Arabia",
+    code: "SA",
+    authority: "KACST (Umm al-Qura)",
+    url: "https://www.ummulqura.org.sa",
+  },
+  {
+    country: "Qatar",
+    code: "QA",
+    authority: "Ministry of Awqaf and Islamic Affairs",
+    url: "https://www.islam.gov.qa",
+  },
 ];
