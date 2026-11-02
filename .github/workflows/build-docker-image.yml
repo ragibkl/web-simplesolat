@@ -3,6 +3,9 @@ name: web-simplesolat Docker Image CI
 on:
   push:
     branches: ["main"]
+  # Zone pages are built from simplesolat-data at build time: run this by hand
+  # to pick up data changes (zone names, new countries) without a code change.
+  workflow_dispatch:
   pull_request:
     branches: ["main"]
 
