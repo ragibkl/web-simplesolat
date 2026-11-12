@@ -165,7 +165,8 @@ const pageCountries = await getPageCountries();
     el("place-areas").hidden = !text.areas;
     el("place-meta").textContent = text.meta;
     el("place").textContent = text.printPlace;
-    el("meta").textContent = `${zone.code} · Source: ${zoneSource(zone, country)}`;
+    el("meta").textContent =
+      `${zone.code} · Source: ${zoneSource(zone, country)}`;
 
     const hasPage = hasZonePages(country.code);
     const linkTo = (z: Zone) =>
