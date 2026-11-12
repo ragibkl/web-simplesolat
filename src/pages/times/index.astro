@@ -114,6 +114,7 @@ const pageCountries = await getPageCountries();
     getZones,
     nowIn,
     type Zone,
+    zoneSource,
   } from "../../lib/times";
 
   const el = <T extends HTMLElement>(id: string) =>
@@ -158,13 +159,13 @@ const pageCountries = await getPageCountries();
   // The place heading, meta line, link to the zone's own page and other zones
   // (same as on a zone page).
   function showZoneHeader(country: Country, zone: Zone, zones: Zone[]) {
-    const text = placeText(zone, country.name, country.source);
+    const text = placeText(zone, country.name, zoneSource(zone, country));
     el("place-heading").textContent = text.heading;
     el("place-areas").textContent = text.areas;
     el("place-areas").hidden = !text.areas;
     el("place-meta").textContent = text.meta;
     el("place").textContent = text.printPlace;
-    el("meta").textContent = `${zone.code} · Source: ${country.source}`;
+    el("meta").textContent = `${zone.code} · Source: ${zoneSource(zone, country)}`;
 
     const hasPage = hasZonePages(country.code);
     const linkTo = (z: Zone) =>

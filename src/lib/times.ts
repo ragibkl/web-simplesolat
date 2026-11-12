@@ -20,7 +20,14 @@ export type Zone = {
   state: string;
   location: string;
   timezone: string;
+  // The zone's own authority when it differs from the country's (Selangor's
+  // 2027 district zones MFSGR01-09: "Mufti Selangor").
+  source?: string;
 };
+
+// Who publishes a zone's times: the zone's own source, else the country's.
+export const zoneSource = (zone: Zone, country: Country) =>
+  zone.source ?? country.source;
 export type Key =
   "imsak" | "fajr" | "syuruk" | "dhuha" | "dhuhr" | "asr" | "maghrib" | "isha";
 // Dhuha only comes from official timetables (Malaysia and Brunei).
