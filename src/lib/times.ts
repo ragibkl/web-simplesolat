@@ -23,6 +23,9 @@ export type Zone = {
   // The zone's own authority when it differs from the country's (Selangor's
   // 2027 district zones MFSGR01-09: "Mufti Selangor").
   source?: string;
+  // Not listed in zone pickers or zone pages yet (Selangor's MFSGR01-09
+  // until the December 2026 map switch).
+  hidden?: boolean;
 };
 
 // Who publishes a zone's times: the zone's own source, else the country's.
@@ -142,7 +145,9 @@ export async function fillZones(
   selected?: string,
 ) {
   select.disabled = true;
-  const zones = await getZones(countryCode);
+  const zones = (await getZones(countryCode)).filter(
+    (z) => !z.hidden || z.code === selected,
+  );
   const byState = new Map<string, Zone[]>();
   for (const z of zones)
     byState.set(z.state, [...(byState.get(z.state) ?? []), z]);
