@@ -44,7 +44,8 @@ export function getPageCountries(): Promise<CountryWithZones[]> {
       PAGE_COUNTRIES.map(async (pc) => {
         const country = countries.find((c) => c.code === pc.code);
         if (!country) throw new Error(`${pc.code} missing from countries.yaml`);
-        return { ...pc, country, zones: await getZones(pc.code) };
+        const zones = (await getZones(pc.code)).filter((z) => !z.hidden);
+        return { ...pc, country, zones };
       }),
     );
   })();

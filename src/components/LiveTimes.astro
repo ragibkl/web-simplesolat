@@ -68,6 +68,7 @@ import TodayCard from "./TodayCard.astro";
     getPosition,
     getZones,
     nowIn,
+    zoneSource,
   } from "../lib/times";
   import { placeText } from "../lib/place";
   import { renderToday } from "../lib/today";
@@ -125,7 +126,7 @@ import TodayCard from "./TodayCard.astro";
     current = {
       // Same wording as /times/ and the zone pages.
       place: zone.location,
-      meta: placeText(zone, country.name, country.source).meta,
+      meta: placeText(zone, country.name, zoneSource(zone, country)).meta,
       timezone: zone.timezone,
       day,
       monthHref: hasZonePages(country.code)

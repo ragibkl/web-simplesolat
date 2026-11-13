@@ -11,7 +11,7 @@ import {
   zonePath,
   type CountryWithZones,
 } from "../../../lib/zonePages";
-import type { Zone } from "../../../lib/times";
+import { type Zone, zoneSource } from "../../../lib/times";
 
 export async function getStaticPaths() {
   const countries = await getPageCountries();
@@ -24,7 +24,7 @@ export async function getStaticPaths() {
 }
 
 const { c, zone } = Astro.props as { c: CountryWithZones; zone: Zone };
-const source = c.country.source;
+const source = zoneSource(zone, c.country);
 const text = placeText(zone, c.name, source);
 
 // The tab title keeps every area (for searches).
